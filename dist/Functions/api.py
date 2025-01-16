@@ -121,6 +121,12 @@ def Metrics(filtered_data, group_by_month, args, df_recouvrement, debut_date, fi
         }
 
 
+@main.route("/", methods=["GET"])
+@cross_origin()
+def Home():
+    return jsonify({"response": "Home Response"})
+
+
 @main.route("/API/V1/TESTIGN", methods=["GET"])
 @cross_origin()
 def Testing():
