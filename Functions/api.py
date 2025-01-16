@@ -3,7 +3,7 @@ from flask import jsonify, request, Response, Blueprint
 import os
 import pandas as pd
 from datetime import datetime
-from .Functions.Utils import (
+from .Utilitys.Utils import (
     get_files_in_directory,
     should_aggregate_monthly,
     aggregate_time_series,

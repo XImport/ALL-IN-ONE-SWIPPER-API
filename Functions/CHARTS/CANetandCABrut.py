@@ -1,4 +1,4 @@
-from ..Functions.Utils import aggregate_time_series
+from ..Utilitys.Utils import aggregate_time_series
 
 
 def prepare_ca_data(filtered_data, group_by_month):

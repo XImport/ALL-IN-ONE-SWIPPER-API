@@ -1,4 +1,4 @@
-from ..Functions.Utils import aggregate_time_series, List_Division
+from ..Utilitys.Utils import aggregate_time_series, List_Division
 
 
 def prepare_pmv_data(filtered_data, group_by_month):

@@ -1,4 +1,4 @@
-from ..Functions.Utils import aggregate_time_series, should_aggregate_monthly
+from ..Utilitys.Utils import aggregate_time_series, should_aggregate_monthly
 
 
 def prepare_volume_data(filtered_data, group_by_month):
