@@ -1,4 +1,4 @@
-from Functions import create_app
+from dist.Functions import create_app
 
 app = create_app()
 app.run()
