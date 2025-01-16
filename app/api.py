@@ -1,5 +1,5 @@
-from flask import jsonify, request, Response
-from app import app
+from flask import jsonify, request, Response, Blueprint
+
 import os
 import pandas as pd
 from datetime import datetime
@@ -20,6 +20,9 @@ from .CHARTS.PerformanceCommercialAndFinancier import (
 from .CHARTS.PMVGlobal import prepare_pmv_data
 from .CHARTS.TopSixClients import prepare_top_six_clients
 from flask_cors import CORS, cross_origin
+
+
+main = Blueprint("main", __name__)
 
 
 def Metrics(filtered_data, group_by_month, args, df_recouvrement, debut_date, fin_date):
@@ -118,7 +121,13 @@ def Metrics(filtered_data, group_by_month, args, df_recouvrement, debut_date, fi
         }
 
 
-@app.route("/API/V1/BalanceSheet", methods=["POST"])
+@main.route("/API/V1/TESTIGN", methods=["GET"])
+@cross_origin()
+def Testing():
+    return jsonify({"response": "hello world"})
+
+
+@main.route("/API/V1/BalanceSheet", methods=["GET", "POST"])
 @cross_origin()
 def balance_sheet():
     try:
@@ -407,7 +416,7 @@ def balance_sheet():
             "AggregationType": "monthly" if group_by_month else "daily",
             **chart_data,
         }
-        print(type((final_response)))
+
         return final_response
 
     except Exception as e:
@@ -425,3 +434,6 @@ def balance_sheet():
             ),
             500,
         )
+
+
+# Vercel requires this for Python functions

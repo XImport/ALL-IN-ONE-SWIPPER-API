@@ -1,8 +1,16 @@
 from flask import Flask
+from flask_cors import CORS
 
-from flask_cors import CORS, cross_origin
 
+def create_app():
+    app = Flask(__name__)
+    app.config.from_mapping(
+        SECRET_KEY="your-secret-key",
+    )
+    CORS(app)
+    # Register blueprints or routes
+    from .api import main
 
-app = Flask(__name__)
-cors = CORS(app)
-app.config["CORS_HEADERS"] = "Content-Type"
+    app.register_blueprint(main)
+
+    return app
