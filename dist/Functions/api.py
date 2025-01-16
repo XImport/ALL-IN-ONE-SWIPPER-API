@@ -161,7 +161,8 @@ def balance_sheet():
 
         # Specific file path handling
         year = str(debut_date.year)
-        source_path = os.path.join(".", "app/Source/", year)
+        source_path = os.path.join(os.path.dirname(__file__), "Source", year)
+        # source_path = os.path.join(".", "app/Source", year)
 
         expected_file = f"Source {year}.xlsx"
         target_file = os.path.join(source_path, expected_file)
