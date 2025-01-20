@@ -22,6 +22,7 @@ from .CHARTS.TopSixClients import prepare_top_six_clients
 from flask_cors import CORS, cross_origin
 import concurrent.futures
 from functools import lru_cache
+import json
 
 main = Blueprint("main", __name__)
 
@@ -141,6 +142,7 @@ def read_excel_file(file_path):
         "ventes": pd.read_excel(file_path, sheet_name="VENTES"),
         "recouvrement": pd.read_excel(file_path, sheet_name="RECOUVREMENT"),
         "objectifs": pd.read_excel(file_path, sheet_name="OBJECTIFS"),
+        "info_clients": pd.read_excel(file_path, sheet_name="INFO CLIENTS"),
     }
 
 
@@ -416,3 +418,89 @@ def prepare_objectives_data(
         "COMPENSATION_OBJECTIF": objectives["COMPENSATION OBJ"][0],
         "COUT_TRANSPORT": cout_transport,
     }
+
+
+@main.route("/API/V1/InfoClients", methods=["POST"])
+@cross_origin()
+def Info_Clients_req():
+    try:
+        # Get and validate input dates
+        debut_date = request.json.get("DébutDate")
+        fin_date = request.json.get("FinDate")
+
+        if not debut_date or not fin_date:
+            return jsonify({"Message": "DébutDate and FinDate are required."}), 400
+
+        # Convert dates once and reuse
+        try:
+            debut_date = pd.to_datetime(debut_date, format="%d/%m/%Y")
+            fin_date = pd.to_datetime(fin_date, format="%d/%m/%Y")
+        except ValueError:
+            return jsonify({"Message": "Invalid date format. Use DD/MM/YYYY."}), 400
+
+        if fin_date < debut_date:
+            return (
+                jsonify({"Message": "FinDate cannot be earlier than DébutDate."}),
+                400,
+            )
+
+        # File path handling
+
+        year = str(debut_date.year)
+        source_path = os.path.join(os.path.dirname(__file__), "Source", year)
+        target_file = os.path.join(source_path, f"Source {year}.xlsx")
+
+        # Validate file existence
+        if not os.path.exists(source_path) or not os.path.exists(target_file):
+            return jsonify({"Message": f"Data not found for year {year}"}), 404
+
+        # Read data with caching
+        try:
+            data = read_excel_file(target_file)
+            info_clients_df = data["info_clients"]
+            ventes_df = data["ventes"]
+        except Exception as e:
+            return jsonify({"Message": f"Error reading data: {str(e)}"}), 500
+
+        date_mask_ventes = (ventes_df["Date"].dt.date >= debut_date.date()) & (
+            ventes_df["Date"].dt.date <= fin_date.date()
+        )
+        info_clients_df = info_clients_df.map(
+            lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else x
+        )
+
+        # info_clients_json = json.loads(info_clients_df.to_json(orient="records"))
+
+        # First get the matched records
+        filtered_ventes = ventes_df[date_mask_ventes]
+        info_clients = info_clients_df["NOM DU CLIENT"].str.strip().str.upper()
+        ventes_clients = filtered_ventes["Client"].str.strip().str.upper()
+        matching_clients_mask = ventes_clients.isin(info_clients)
+        matching_records = filtered_ventes[matching_clients_mask]
+
+        # Convert info_clients_df to records
+        client_records = info_clients_df.to_dict(orient="records")
+
+        # Create a dictionary of total quantities per client
+        client_quantities = (
+            matching_records.groupby("Client")["Qté en T"].sum().to_dict()
+        )
+
+        client_CA_BRUT = matching_records.groupby("Client")["CA BRUT"].sum().to_dict()
+        client_Cout_Transport = (
+            matching_records.groupby("Client")["Coût de transport"].sum().to_dict()
+        )
+
+        # Add quantities to each client record
+        for record in client_records:
+            client_name = record["NOM DU CLIENT"].strip().upper()
+            record["Qté en T"] = client_quantities.get(client_name, 0)
+            record["CA BRUT"] = client_CA_BRUT.get(client_name, 0)
+            record["COUT TRANSPORT "] = client_Cout_Transport.get(client_name, 0)
+
+        # Return the array of objects directly (no need for json.dumps)
+
+        return jsonify({"INFO_CLIENTS": client_records})
+
+    except Exception as e:
+        return jsonify({"Message": "An error occurred", "Error": str(e)}), 500
