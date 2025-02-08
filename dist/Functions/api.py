@@ -496,7 +496,7 @@ def Info_Clients_req():
             client_name = record["NOM DU CLIENT"].strip().upper()
             record["Qté en T"] = client_quantities.get(client_name, 0)
             record["CA BRUT"] = client_CA_BRUT.get(client_name, 0)
-            record["COUT TRANSPORT "] = client_Cout_Transport.get(client_name, 0)
+            record["COUT TRANSPORT"] = client_Cout_Transport.get(client_name, 0)
 
         # Return the array of objects directly (no need for json.dumps)
 
