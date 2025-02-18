@@ -211,11 +211,21 @@ def balance_sheet():
         except ValueError:
             return jsonify({"Message": "Invalid date format. Use DD/MM/YYYY."}), 400
 
+        if debut_date.year != fin_date.year:
+            return jsonify({
+                "Message": "Date de début et date de fin doivent être dans la même année"
+            }), 400
+
+
+
+
         if fin_date < debut_date:
             return (
                 jsonify({"Message": "FinDate cannot be earlier than DébutDate."}),
                 400,
             )
+        
+        
 
         # File path handling
         year = str(debut_date.year)
@@ -438,9 +448,17 @@ def Info_Clients_req():
         except ValueError:
             return jsonify({"Message": "Invalid date format. Use DD/MM/YYYY."}), 400
 
+
+        if debut_date.year != fin_date.year:
+            return jsonify({
+                "Message": "Date de début et date de fin doivent être dans la même année"
+            }), 400
+
+
+
         if fin_date < debut_date:
             return (
-                jsonify({"Message": "FinDate cannot be earlier than DébutDate."}),
+                jsonify({"Message": "La date de fin ne peut pas être antérieure à la date de début."}),
                 400,
             )
 
