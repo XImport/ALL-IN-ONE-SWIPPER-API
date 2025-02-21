@@ -40,10 +40,11 @@ def Metrics(filtered_data, group_by_month, args, df_recouvrement, debut_date, fi
     RECOUVREMENT_DATA["Date de Paiement"] = RECOUVREMENT_DATA[
         "Date de Paiement"
     ].dt.strftime("%d/%m/%Y")
+    En_espece_filtered = filtered_data[filtered_data["BC"] == "EN ESPECE"].copy()
     nobles_filtered = filtered_data[filtered_data["Type"] == "Nobles"].copy()
     graves_filtered = filtered_data[filtered_data["Type"] == "Graves"].copy()
     steriles_filtered = filtered_data[filtered_data["Type"] == "Stérile"].copy()
-    En_espece_filtered = filtered_data[filtered_data["BC"] == "EN ESPECE"].copy()
+    
 
     CA_NET_NOBLES = Metrics_DATA_Filters(nobles_filtered, group_by_month)[
         "CA Net"
