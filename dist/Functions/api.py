@@ -219,7 +219,7 @@ def balance_sheet():
             return (
                 jsonify(
                     {"Message": "FinDate cannot be earlier than DébutDate."}),
-                400,
+                404,
             )
 
         # File path handling
@@ -231,7 +231,19 @@ def balance_sheet():
         if not os.path.exists(source_path) or not os.path.exists(target_file):
             return jsonify({"Message": f"Data not found for year {year}"}), 404
 
+
+
+        data = read_excel_file(target_file)
+        ventes_df = data["ventes"]
+        if ventes_df["Date"].iloc[-1] < fin_date:
+            return jsonify({
+                "Message":
+                "Les données recherchées ne sont pas accessibles."
+            }), 404
+
         # Read data with caching
+
+
         try:
             data = read_excel_file(target_file)
             ventes_df = data["ventes"]
@@ -248,13 +260,7 @@ def balance_sheet():
                                            format="%d/%m/%Y",
                                            errors="coerce")
 
-        # Compare the dates properly
-        if ventes_df["Date"].iloc[-1] < fin_date:
-            
-            return jsonify({
-                "Message":
-                "Les données recherchées ne sont pas accessibles."
-            }), 200
+        
 
         recouvrement_df["Date de Paiement"] = pd.to_datetime(
             recouvrement_df["Date de Paiement"],
@@ -515,6 +521,15 @@ def Info_Clients_req():
             return jsonify({"Message": f"Data not found for year {year}"}), 404
 
         # Read data with caching
+
+        data = read_excel_file(target_file)
+        ventes_df = data["ventes"]
+        if ventes_df["Date"].iloc[-1] < fin_date:
+            return jsonify({
+                "Message":
+                "Les données recherchées ne sont pas accessibles."
+            }), 404
+
         try:
             data = read_excel_file(target_file)
             info_clients_df = data["info_clients"]
@@ -527,11 +542,7 @@ def Info_Clients_req():
         info_clients_df = info_clients_df.map(
             lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else x)
 
-        if ventes_df["Date"].iloc[-1] < fin_date:
-            return jsonify({
-                "Message":
-                "Les données recherchées ne sont pas accessibles."
-            }), 200
+        
 
         # info_clients_json = json.loads(info_clients_df.to_json(orient="records"))
 
