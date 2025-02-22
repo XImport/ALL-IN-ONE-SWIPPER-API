@@ -239,7 +239,7 @@ def balance_sheet():
             return jsonify({
                 "Message":
                 "Les données recherchées ne sont pas accessibles."
-            }), 404
+            }), 200
 
         # Read data with caching
 
@@ -319,8 +319,7 @@ def balance_sheet():
 
         # Prepare final response
         final_response = {
-            "Message":
-            "Balance Sheet Generated Successfully",
+            
             "Metrics":
             metrics_data,
             "TABLES_DATA_OBJECTIFS":
@@ -528,7 +527,7 @@ def Info_Clients_req():
             return jsonify({
                 "Message":
                 "Les données recherchées ne sont pas accessibles."
-            }), 404
+            }), 200
 
         try:
             data = read_excel_file(target_file)
