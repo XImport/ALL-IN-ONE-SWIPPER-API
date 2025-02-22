@@ -241,15 +241,28 @@ def balance_sheet():
         try:
             data = read_excel_file(target_file)
             ventes_df = data["ventes"]
+            
             recouvrement_df = data["recouvrement"]
             commercials_objectifs_df = data["objectifs"]
         except Exception as e:
             return jsonify({"Message": f"Error reading data: {str(e)}"}), 500
 
         # Optimize date handling
-        ventes_df["Date"] = pd.to_datetime(
-            ventes_df["Date"], format="%d/%m/%Y", errors="coerce"
-        )
+
+
+
+
+        # Convert the Date column to datetime
+        ventes_df["Date"] = pd.to_datetime(ventes_df["Date"], format="%d/%m/%Y", errors="coerce")
+
+
+        
+
+# Compare the dates properly
+        if ventes_df["Date"].iloc[-1] < fin_date:
+            return jsonify({"Message": "oppppppppppppsi"})
+
+
         recouvrement_df["Date de Paiement"] = pd.to_datetime(
             recouvrement_df["Date de Paiement"], format="%d/%m/%Y", errors="coerce"
         )
@@ -487,6 +500,11 @@ def Info_Clients_req():
         info_clients_df = info_clients_df.map(
             lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else x
         )
+
+
+        if ventes_df["Date"].iloc[-1] < fin_date:
+            return jsonify({"Message": "oppppppppppppsi"})
+
 
         # info_clients_json = json.loads(info_clients_df.to_json(orient="records"))
 
