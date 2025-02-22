@@ -260,7 +260,7 @@ def balance_sheet():
 
 # Compare the dates properly
         if ventes_df["Date"].iloc[-1] < fin_date:
-            return jsonify({"Message": "oppppppppppppsi"})
+            return jsonify({"Message": "Les données recherchées ne sont pas accessibles."}),400
 
 
         recouvrement_df["Date de Paiement"] = pd.to_datetime(
@@ -503,7 +503,7 @@ def Info_Clients_req():
 
 
         if ventes_df["Date"].iloc[-1] < fin_date:
-            return jsonify({"Message": "oppppppppppppsi"})
+            return jsonify({"Message": "Les données recherchées ne sont pas accessibles."}),400
 
 
         # info_clients_json = json.loads(info_clients_df.to_json(orient="records"))
