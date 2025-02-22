@@ -15,8 +15,7 @@ from .CHARTS.CANetByProducts import prepare_ca_net_by_product
 from .CHARTS.VoyagesRendus import prepare_voyages_rendus_data
 from .CHARTS.CANetandCABrut import prepare_ca_data
 from .CHARTS.PerformanceCommercialAndFinancier import (
-    prepare_performance_créance_commerciale_recouvrement,
-)
+    prepare_performance_créance_commerciale_recouvrement, )
 from .CHARTS.PMVGlobal import prepare_pmv_data
 from .CHARTS.TopSixClients import prepare_top_six_clients
 from flask_cors import CORS, cross_origin
@@ -27,43 +26,38 @@ import json
 main = Blueprint("main", __name__)
 
 
-def Metrics(filtered_data, group_by_month, args, df_recouvrement, debut_date, fin_date):
+def Metrics(filtered_data, group_by_month, args, df_recouvrement, debut_date,
+            fin_date):
     RECOUVREMENT_DATA = df_recouvrement
     RECOUVREMENT_DATA["Date de Paiement"] = pd.to_datetime(
-        RECOUVREMENT_DATA["Date de Paiement"], format="%d/%m/%Y", errors="coerce"
-    )
+        RECOUVREMENT_DATA["Date de Paiement"],
+        format="%d/%m/%Y",
+        errors="coerce")
     RECOUVREMENT_DATA = RECOUVREMENT_DATA[
         (RECOUVREMENT_DATA["Date de Paiement"].dt.date >= debut_date.date())
-        & (RECOUVREMENT_DATA["Date de Paiement"].dt.date <= fin_date.date())
-    ]
+        & (RECOUVREMENT_DATA["Date de Paiement"].dt.date <= fin_date.date())]
 
     RECOUVREMENT_DATA["Date de Paiement"] = RECOUVREMENT_DATA[
-        "Date de Paiement"
-    ].dt.strftime("%d/%m/%Y")
-    En_espece_filtered = filtered_data[filtered_data["BC"] == "EN ESPECE"].copy()
+        "Date de Paiement"].dt.strftime("%d/%m/%Y")
+    En_espece_filtered = filtered_data[filtered_data["BC"] ==
+                                       "EN ESPECE"].copy()
     nobles_filtered = filtered_data[filtered_data["Type"] == "Nobles"].copy()
     graves_filtered = filtered_data[filtered_data["Type"] == "Graves"].copy()
-    steriles_filtered = filtered_data[filtered_data["Type"] == "Stérile"].copy()
-    
+    steriles_filtered = filtered_data[filtered_data["Type"] ==
+                                      "Stérile"].copy()
 
-    CA_NET_NOBLES = Metrics_DATA_Filters(nobles_filtered, group_by_month)[
-        "CA Net"
-    ].sum()
-    CA_NET_GRAVES = Metrics_DATA_Filters(graves_filtered, group_by_month)[
-        "CA Net"
-    ].sum()
-    CA_NET_STERILES = Metrics_DATA_Filters(steriles_filtered, group_by_month)[
-        "CA Net"
-    ].sum()
-    QNT_NET_NOBLES = Metrics_DATA_Filters(nobles_filtered, group_by_month)[
-        "Qté en T"
-    ].sum()
-    QNT_NET_GRAVES = Metrics_DATA_Filters(graves_filtered, group_by_month)[
-        "Qté en T"
-    ].sum()
-    QNT_NET_STERILES = Metrics_DATA_Filters(steriles_filtered, group_by_month)[
-        "Qté en T"
-    ].sum()
+    CA_NET_NOBLES = Metrics_DATA_Filters(nobles_filtered,
+                                         group_by_month)["CA Net"].sum()
+    CA_NET_GRAVES = Metrics_DATA_Filters(graves_filtered,
+                                         group_by_month)["CA Net"].sum()
+    CA_NET_STERILES = Metrics_DATA_Filters(steriles_filtered,
+                                           group_by_month)["CA Net"].sum()
+    QNT_NET_NOBLES = Metrics_DATA_Filters(nobles_filtered,
+                                          group_by_month)["Qté en T"].sum()
+    QNT_NET_GRAVES = Metrics_DATA_Filters(graves_filtered,
+                                          group_by_month)["Qté en T"].sum()
+    QNT_NET_STERILES = Metrics_DATA_Filters(steriles_filtered,
+                                            group_by_month)["Qté en T"].sum()
 
     # Calculate totals used in both conditions
     DATA = aggregate_time_series(
@@ -94,26 +88,29 @@ def Metrics(filtered_data, group_by_month, args, df_recouvrement, debut_date, fi
         PMV_GLOBAL = CA_NET_TOTAL / QNT_EN_TONNE_TOTAL if QNT_EN_TONNE_TOTAL != 0 else 0
 
         return {
-            "METRICS_CA_BRUT": CA_BRUT_TOTAL,
-            "METRICS_CA_NET": CA_NET_TOTAL,
-            "METRICS_PMV_GLOBAL": PMV_GLOBAL,
-            "METRICS_QNT_EN_TONNE_GLOBALE": QNT_EN_TONNE_TOTAL,
-            "METRICS_PMV_HORS_STERILE": (
-                (CA_NET_NOBLES + CA_NET_GRAVES) / (QNT_NET_NOBLES + QNT_NET_GRAVES)
-                if (QNT_NET_NOBLES + QNT_NET_GRAVES) != 0
-                else 0
-            ),
-            "METRICS_MARGE_TRANSPORT": MARGE_TRANSPORT,
+            "METRICS_CA_BRUT":
+            CA_BRUT_TOTAL,
+            "METRICS_CA_NET":
+            CA_NET_TOTAL,
+            "METRICS_PMV_GLOBAL":
+            PMV_GLOBAL,
+            "METRICS_QNT_EN_TONNE_GLOBALE":
+            QNT_EN_TONNE_TOTAL,
+            "METRICS_PMV_HORS_STERILE":
+            ((CA_NET_NOBLES + CA_NET_GRAVES) /
+             (QNT_NET_NOBLES + QNT_NET_GRAVES) if
+             (QNT_NET_NOBLES + QNT_NET_GRAVES) != 0 else 0),
+            "METRICS_MARGE_TRANSPORT":
+            MARGE_TRANSPORT,
         }
     elif args == "METRICS#2":
-        MIX_PRODUCT = (
-            QNT_NET_NOBLES / QNT_EN_TONNE_TOTAL if QNT_EN_TONNE_TOTAL != 0 else 0
-        )
+        MIX_PRODUCT = (QNT_NET_NOBLES /
+                       QNT_EN_TONNE_TOTAL if QNT_EN_TONNE_TOTAL != 0 else 0)
 
-        CAISSE_ESPECE = Metrics_DATA_Filters(En_espece_filtered, group_by_month)[
-            "CA BRUT"
-        ].sum()
-        VOYAGES_RENDUS = prepare_voyages_rendus_data(filtered_data, group_by_month)
+        CAISSE_ESPECE = Metrics_DATA_Filters(En_espece_filtered,
+                                             group_by_month)["CA BRUT"].sum()
+        VOYAGES_RENDUS = prepare_voyages_rendus_data(filtered_data,
+                                                     group_by_month)
         global RECOUVREMENT
         RECOUVREMENT = RECOUVREMENT_DATA["Montant Paye"].tolist()
         return {
@@ -148,33 +145,31 @@ def read_excel_file(file_path):
 
 
 # Parallelize data preparation functions
-def prepare_data_parallel(
-    filtered_ventes, group_by_month, target_file, debut_date, fin_date
-):
+def prepare_data_parallel(filtered_ventes, group_by_month, target_file,
+                          debut_date, fin_date):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = {
-            "volume_data": executor.submit(
-                prepare_volume_data, filtered_ventes, group_by_month
-            ),
-            "ca_data": executor.submit(
-                prepare_ca_data, filtered_ventes, group_by_month
-            ),
-            "pmv_data": executor.submit(
-                prepare_pmv_data, filtered_ventes, group_by_month
-            ),
-            "voyages_data": executor.submit(
-                prepare_voyages_rendus_data, filtered_ventes, group_by_month
-            ),
-            "volume_by_product": executor.submit(
-                prepare_volume_data_by_product, filtered_ventes, group_by_month
-            ),
-            "ca_net_by_product": executor.submit(
-                prepare_ca_net_by_product, filtered_ventes, group_by_month
-            ),
-            "top_six_clients": executor.submit(
-                prepare_top_six_clients, filtered_ventes, group_by_month
-            ),
-            "performance_creance": executor.submit(
+            "volume_data":
+            executor.submit(prepare_volume_data, filtered_ventes,
+                            group_by_month),
+            "ca_data":
+            executor.submit(prepare_ca_data, filtered_ventes, group_by_month),
+            "pmv_data":
+            executor.submit(prepare_pmv_data, filtered_ventes, group_by_month),
+            "voyages_data":
+            executor.submit(prepare_voyages_rendus_data, filtered_ventes,
+                            group_by_month),
+            "volume_by_product":
+            executor.submit(prepare_volume_data_by_product, filtered_ventes,
+                            group_by_month),
+            "ca_net_by_product":
+            executor.submit(prepare_ca_net_by_product, filtered_ventes,
+                            group_by_month),
+            "top_six_clients":
+            executor.submit(prepare_top_six_clients, filtered_ventes,
+                            group_by_month),
+            "performance_creance":
+            executor.submit(
                 prepare_performance_créance_commerciale_recouvrement,
                 target_file,
                 debut_date,
@@ -203,30 +198,29 @@ def balance_sheet():
         fin_date = request.json.get("FinDate")
 
         if not debut_date or not fin_date:
-            return jsonify({"Message": "DébutDate and FinDate are required."}), 400
+            return jsonify({"Message":
+                            "DébutDate and FinDate are required."}), 400
 
         # Convert dates once and reuse
         try:
             debut_date = pd.to_datetime(debut_date, format="%d/%m/%Y")
             fin_date = pd.to_datetime(fin_date, format="%d/%m/%Y")
         except ValueError:
-            return jsonify({"Message": "Invalid date format. Use DD/MM/YYYY."}), 400
+            return jsonify({"Message":
+                            "Invalid date format. Use DD/MM/YYYY."}), 400
 
         if debut_date.year != fin_date.year:
             return jsonify({
-                "Message": "Date de début et date de fin doivent être dans la même année"
+                "Message":
+                "Date de début et date de fin doivent être dans la même année"
             }), 400
-
-
-
 
         if fin_date < debut_date:
             return (
-                jsonify({"Message": "FinDate cannot be earlier than DébutDate."}),
+                jsonify(
+                    {"Message": "FinDate cannot be earlier than DébutDate."}),
                 400,
             )
-        
-        
 
         # File path handling
         year = str(debut_date.year)
@@ -241,7 +235,7 @@ def balance_sheet():
         try:
             data = read_excel_file(target_file)
             ventes_df = data["ventes"]
-            
+
             recouvrement_df = data["recouvrement"]
             commercials_objectifs_df = data["objectifs"]
         except Exception as e:
@@ -249,28 +243,27 @@ def balance_sheet():
 
         # Optimize date handling
 
-
-
-
         # Convert the Date column to datetime
-        ventes_df["Date"] = pd.to_datetime(ventes_df["Date"], format="%d/%m/%Y", errors="coerce")
+        ventes_df["Date"] = pd.to_datetime(ventes_df["Date"],
+                                           format="%d/%m/%Y",
+                                           errors="coerce")
 
-
-        
-
-# Compare the dates properly
+        # Compare the dates properly
         if ventes_df["Date"].iloc[-1] < fin_date:
-            return jsonify({"Message": "Les données recherchées ne sont pas accessibles."}),400
-
+            
+            return jsonify({
+                "Message":
+                "Les données recherchées ne sont pas accessibles."
+            }), 200
 
         recouvrement_df["Date de Paiement"] = pd.to_datetime(
-            recouvrement_df["Date de Paiement"], format="%d/%m/%Y", errors="coerce"
-        )
+            recouvrement_df["Date de Paiement"],
+            format="%d/%m/%Y",
+            errors="coerce")
 
         # Use vectorized operations for filtering
         date_mask_ventes = (ventes_df["Date"].dt.date >= debut_date.date()) & (
-            ventes_df["Date"].dt.date <= fin_date.date()
-        )
+            ventes_df["Date"].dt.date <= fin_date.date())
         date_mask_recouvrement = (
             recouvrement_df["Date de Paiement"].dt.date >= debut_date.date()
         ) & (recouvrement_df["Date de Paiement"].dt.date <= fin_date.date())
@@ -280,7 +273,8 @@ def balance_sheet():
 
         if filtered_ventes.empty and filtered_recouvrement.empty:
             return (
-                jsonify({"Message": "No data found between the specified dates."}),
+                jsonify(
+                    {"Message": "No data found between the specified dates."}),
                 404,
             )
 
@@ -288,9 +282,8 @@ def balance_sheet():
         group_by_month = should_aggregate_monthly(debut_date, fin_date)
 
         # Parallel processing for chart data
-        chart_data = prepare_data_parallel(
-            filtered_ventes, group_by_month, target_file, debut_date, fin_date
-        )
+        chart_data = prepare_data_parallel(filtered_ventes, group_by_month,
+                                           target_file, debut_date, fin_date)
 
         # Calculate metrics in parallel
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -320,9 +313,12 @@ def balance_sheet():
 
         # Prepare final response
         final_response = {
-            "Message": "Balance Sheet Generated Successfully",
-            "Metrics": metrics_data,
-            "TABLES_DATA_OBJECTIFS": prepare_objectives_data(
+            "Message":
+            "Balance Sheet Generated Successfully",
+            "Metrics":
+            metrics_data,
+            "TABLES_DATA_OBJECTIFS":
+            prepare_objectives_data(
                 commercials_objectifs_df,
                 filtered_ventes,
                 filtered_recouvrement,
@@ -330,7 +326,8 @@ def balance_sheet():
                 debut_date,
                 fin_date,
             ),
-            "AggregationType": "monthly" if group_by_month else "daily",
+            "AggregationType":
+            "monthly" if group_by_month else "daily",
             **chart_data,
         }
 
@@ -392,55 +389,83 @@ def prepare_objectives_data(
 
     # Get performance creance data
     perf_creance = prepare_performance_créance_commerciale_recouvrement(
-        target_file, debut_date, fin_date
-    )
+        target_file, debut_date, fin_date)
 
     # Prepare the response dictionary
     return {
         # CA (Chiffre d'Affaires) Metrics
-        "CA_BRUT_OBJECTIF": objectives["CA BRUT OBJ"][0],
-        "CA_BRUT": ca_brut_total,
-        "CA_NET_OBJECTIF": objectives["CA NET OBJ"][0],
-        "CA_NET": ca_net_total,
-        "CA_TRANSPORT_OBJECTIF": objectives["CA TRANSPORT OBJ"][0],
-        "CA_TRANSPORT": ca_transport,
+        "CA_BRUT_OBJECTIF":
+        objectives["CA BRUT OBJ"][0],
+        "CA_BRUT":
+        ca_brut_total,
+        "CA_NET_OBJECTIF":
+        objectives["CA NET OBJ"][0],
+        "CA_NET":
+        ca_net_total,
+        "CA_TRANSPORT_OBJECTIF":
+        objectives["CA TRANSPORT OBJ"][0],
+        "CA_TRANSPORT":
+        ca_transport,
         # Transport Margins
-        "MARGE_TRANSPORT_OBJECTIF": objectives["MARGE TRANSPORT OBJ"][0],
-        "MARGE_TRANSPORT": marge_transport,
+        "MARGE_TRANSPORT_OBJECTIF":
+        objectives["MARGE TRANSPORT OBJ"][0],
+        "MARGE_TRANSPORT":
+        marge_transport,
         # PMV (Prix Moyen de Vente) Metrics
-        "PMV_GLOBAL_OBJECTIF": objectives["PMV GLOBAL OBJ"][0],
-        "PMV_GLOBAL": pmv_global,
+        "PMV_GLOBAL_OBJECTIF":
+        objectives["PMV GLOBAL OBJ"][0],
+        "PMV_GLOBAL":
+        pmv_global,
         # Creance (Receivables) Metrics
-        "CREANCE_COMMERCIAL_OBJECTIF": objectives["CREANCE COMMERCIAL OBJ"][0],
-        "CREANCE_COMMERCIAL": perf_creance["GRAPHPERFOCECREANCECOMMERCIALE"][-1],
-        "CREANCE_CRJ_OBJECTIF": objectives["CREANCE CRJ OBJ"][0],
-        "CREANCE_CRJ": perf_creance["GRAPHCREANCECRJ"][-1],
-        "CREANCE_H.RECOUVREMENT_OBJECTIF": objectives["CREANCE H.RECOUVREMENT OBJ"][0],
-        "CREANCE_H.RECOUVREMENT": perf_creance["GRAPHCREANCEHRECOUVREMENT"][-1],
-        "CREANCE_CONTENTIEUX_OBJECTIF": objectives["CREANCE CONTENTIEUX OBJ"][0],
-        "CREANCE_CONTENTIEUX": perf_creance["GRAPHCREANCECONTENIEUX"][-1],
+        "CREANCE_COMMERCIAL_OBJECTIF":
+        objectives["CREANCE COMMERCIAL OBJ"][0],
+        "CREANCE_COMMERCIAL":
+        perf_creance["GRAPHPERFOCECREANCECOMMERCIALE"][-1],
+        "CREANCE_CRJ_OBJECTIF":
+        objectives["CREANCE CRJ OBJ"][0],
+        "CREANCE_CRJ":
+        perf_creance["GRAPHCREANCECRJ"][-1],
+        "CREANCE_H.RECOUVREMENT_OBJECTIF":
+        objectives["CREANCE H.RECOUVREMENT OBJ"][0],
+        "CREANCE_H.RECOUVREMENT":
+        perf_creance["GRAPHCREANCEHRECOUVREMENT"][-1],
+        "CREANCE_CONTENTIEUX_OBJECTIF":
+        objectives["CREANCE CONTENTIEUX OBJ"][0],
+        "CREANCE_CONTENTIEUX":
+        perf_creance["GRAPHCREANCECONTENIEUX"][-1],
         # Calculate Global Creance
-        "CREANCE_GLOBAL_OBJECTIF": objectives["CREANCE GLOBAL OBJ"][0],
-        "CREANCE_GLOBAL": (
-            perf_creance["GRAPHPERFOCECREANCECOMMERCIALE"][-1]
-            + perf_creance["GRAPHCREANCECRJ"][-1]
-            + perf_creance["GRAPHCREANCEHRECOUVREMENT"][-1]
-            + perf_creance["GRAPHCREANCECONTENIEUX"][-1]
-        ),
+        "CREANCE_GLOBAL_OBJECTIF":
+        objectives["CREANCE GLOBAL OBJ"][0],
+        "CREANCE_GLOBAL": (perf_creance["GRAPHPERFOCECREANCECOMMERCIALE"][-1] +
+                           perf_creance["GRAPHCREANCECRJ"][-1] +
+                           perf_creance["GRAPHCREANCEHRECOUVREMENT"][-1] +
+                           perf_creance["GRAPHCREANCECONTENIEUX"][-1]),
         # PMV by Product Type
-        "PMV_NOBLES_OBJECTIF": objectives["PMV NOBLES OBJ"][0],
-        "PMV_NOBLES": pmv_nobles,
-        "PMV_GRAVES_OBJECTIF": objectives["PMV GRAVES OBJ"][0],
-        "PMV_GRAVES": pmv_graves,
-        "PMV_STERILE_OBJECTIF": objectives["PMV STERILE OBJ"][0],
-        "PMV_STERILE": pmv_sterile,
+        "PMV_NOBLES_OBJECTIF":
+        objectives["PMV NOBLES OBJ"][0],
+        "PMV_NOBLES":
+        pmv_nobles,
+        "PMV_GRAVES_OBJECTIF":
+        objectives["PMV GRAVES OBJ"][0],
+        "PMV_GRAVES":
+        pmv_graves,
+        "PMV_STERILE_OBJECTIF":
+        objectives["PMV STERILE OBJ"][0],
+        "PMV_STERILE":
+        pmv_sterile,
         # Recovery and Financial Metrics
-        "RECOUVREMENT_OBJECTIF": objectives["RECOUVREMENT OBJ"][0],
-        "RECOUVREMENT": recouvrement_total,
-        "ENCAISSEMENT_OBJECTIF": objectives["ENCAISSEMENT OBJ"][0],
-        "ENCAISSEMENT_FINANCIER": sum(perf_creance["GRAPHENCAISSEMENTFINANCIER"]),
-        "COMPENSATION_OBJECTIF": objectives["COMPENSATION OBJ"][0],
-        "COUT_TRANSPORT": cout_transport,
+        "RECOUVREMENT_OBJECTIF":
+        objectives["RECOUVREMENT OBJ"][0],
+        "RECOUVREMENT":
+        recouvrement_total,
+        "ENCAISSEMENT_OBJECTIF":
+        objectives["ENCAISSEMENT OBJ"][0],
+        "ENCAISSEMENT_FINANCIER":
+        sum(perf_creance["GRAPHENCAISSEMENTFINANCIER"]),
+        "COMPENSATION_OBJECTIF":
+        objectives["COMPENSATION OBJ"][0],
+        "COUT_TRANSPORT":
+        cout_transport,
     }
 
 
@@ -453,26 +478,29 @@ def Info_Clients_req():
         fin_date = request.json.get("FinDate")
 
         if not debut_date or not fin_date:
-            return jsonify({"Message": "DébutDate and FinDate are required."}), 400
+            return jsonify({"Message":
+                            "DébutDate and FinDate are required."}), 400
 
         # Convert dates once and reuse
         try:
             debut_date = pd.to_datetime(debut_date, format="%d/%m/%Y")
             fin_date = pd.to_datetime(fin_date, format="%d/%m/%Y")
         except ValueError:
-            return jsonify({"Message": "Invalid date format. Use DD/MM/YYYY."}), 400
-
+            return jsonify({"Message":
+                            "Invalid date format. Use DD/MM/YYYY."}), 400
 
         if debut_date.year != fin_date.year:
             return jsonify({
-                "Message": "Date de début et date de fin doivent être dans la même année"
+                "Message":
+                "Date de début et date de fin doivent être dans la même année"
             }), 400
-
-
 
         if fin_date < debut_date:
             return (
-                jsonify({"Message": "La date de fin ne peut pas être antérieure à la date de début."}),
+                jsonify({
+                    "Message":
+                    "La date de fin ne peut pas être antérieure à la date de début."
+                }),
                 400,
             )
 
@@ -495,16 +523,15 @@ def Info_Clients_req():
             return jsonify({"Message": f"Error reading data: {str(e)}"}), 500
 
         date_mask_ventes = (ventes_df["Date"].dt.date >= debut_date.date()) & (
-            ventes_df["Date"].dt.date <= fin_date.date()
-        )
+            ventes_df["Date"].dt.date <= fin_date.date())
         info_clients_df = info_clients_df.map(
-            lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else x
-        )
-
+            lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else x)
 
         if ventes_df["Date"].iloc[-1] < fin_date:
-            return jsonify({"Message": "Les données recherchées ne sont pas accessibles."}),400
-
+            return jsonify({
+                "Message":
+                "Les données recherchées ne sont pas accessibles."
+            }), 200
 
         # info_clients_json = json.loads(info_clients_df.to_json(orient="records"))
 
@@ -520,20 +547,20 @@ def Info_Clients_req():
 
         # Create a dictionary of total quantities per client
         client_quantities = (
-            matching_records.groupby("Client")["Qté en T"].sum().to_dict()
-        )
+            matching_records.groupby("Client")["Qté en T"].sum().to_dict())
 
-        client_CA_BRUT = matching_records.groupby("Client")["CA BRUT"].sum().to_dict()
-        client_Cout_Transport = (
-            matching_records.groupby("Client")["Coût de transport"].sum().to_dict()
-        )
+        client_CA_BRUT = matching_records.groupby(
+            "Client")["CA BRUT"].sum().to_dict()
+        client_Cout_Transport = (matching_records.groupby("Client")
+                                 ["Coût de transport"].sum().to_dict())
 
         # Add quantities to each client record
         for record in client_records:
             client_name = record["NOM DU CLIENT"].strip().upper()
             record["Qté en T"] = client_quantities.get(client_name, 0)
             record["CA BRUT"] = client_CA_BRUT.get(client_name, 0)
-            record["COUT TRANSPORT"] = client_Cout_Transport.get(client_name, 0)
+            record["COUT TRANSPORT"] = client_Cout_Transport.get(
+                client_name, 0)
 
         # Return the array of objects directly (no need for json.dumps)
 
