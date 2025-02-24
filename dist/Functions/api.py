@@ -233,13 +233,13 @@ def balance_sheet():
 
 
 
-        data = read_excel_file(target_file)
-        ventes_df = data["ventes"]
-        if ventes_df["Date"].iloc[-1] < fin_date:
-            return jsonify({
-                "Message":
-                "Les données recherchées ne sont pas accessibles."
-            }), 200
+        # data = read_excel_file(target_file)
+        # ventes_df = data["ventes"]
+        # if ventes_df["Date"].iloc[-1] < fin_date:
+        #     return jsonify({
+        #         "Message":
+        #         "Les données recherchées ne sont pas accessibles."
+        #     }), 200
 
         # Read data with caching
 
