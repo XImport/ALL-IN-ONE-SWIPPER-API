@@ -18,11 +18,18 @@ def List_Division(list1, list2, default_value=0):
     if len(list1) != len(list2):
         raise ValueError("Both lists must have the same length.")
 
-    return [
-        (num / denom if denom != 0 else default_value)
-        for num, denom in zip(list1, list2)
-    ]
-
+    result = []
+    for num, denom in zip(list1, list2):
+       
+        if denom != 0:
+            value = num / denom
+           
+            result.append(value)
+        else:
+            print(0)
+            result.append(default_value)
+    
+    return result
 
 def get_files_in_directory(directory_path):
     """
@@ -190,3 +197,49 @@ def should_aggregate_monthly(start_date, end_date):
     print("resuuuuuuuuuuuult : ", (days_difference))
     # If the date range is more than 20 days, aggregate by month
     return days_difference > 20
+
+
+
+def prepare_recouvrement_data(filtered_recouvrement, group_by_month):
+    """
+    Prepare recouvrement chart data from the filtered recouvrement dataframe.
+    
+    Args:
+        filtered_recouvrement (pd.DataFrame): Filtered recouvrement data
+        group_by_month (bool): Whether to aggregate by month or by day
+        
+    Returns:
+        dict: Recouvrement chart data with dates and payment amounts
+    """
+    if filtered_recouvrement.empty:
+        return {"DATES": [], "MONTANTS": []}
+
+    required_columns = {"Date de Paiement", "Montant Paye"}
+    if not required_columns.issubset(filtered_recouvrement.columns):
+        
+        return {"DATES": [], "MONTANTS": []}
+
+    try:
+        # Aggregate data
+        aggregated_data = aggregate_time_series(
+            filtered_recouvrement, "Date de Paiement", ["Montant Paye"], group_by_month
+        )
+
+        if aggregated_data.empty:
+            return {"DATES": [], "MONTANTS": []}
+
+        # Extract dates and amounts
+        dates = aggregated_data["Date de Paiement"].tolist()
+        montants = aggregated_data["Montant Paye"].tolist()
+
+        # Format dates
+        formatted_dates = [
+            date if isinstance(date, str) else date.strftime('%m/%Y' if group_by_month else '%d/%m/%Y')
+            for date in dates
+        ]
+
+        return {"DATES": formatted_dates, "MONTANTS": montants}
+
+    except Exception as e:
+       
+        return {"DATES": [], "MONTANTS": []}

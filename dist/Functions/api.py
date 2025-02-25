@@ -8,6 +8,7 @@ from .Utilitys.Utils import (
     should_aggregate_monthly,
     aggregate_time_series,
     Metrics_DATA_Filters,
+    prepare_recouvrement_data
 )
 from .CHARTS.Volumedata import prepare_volume_data
 from .CHARTS.VolumeByProducts import prepare_volume_data_by_product
@@ -575,6 +576,201 @@ def Info_Clients_req():
         # Return the array of objects directly (no need for json.dumps)
 
         return jsonify({"INFO_CLIENTS": client_records})
+
+    except Exception as e:
+        return jsonify({"Message": "An error occurred", "Error": str(e)}), 500
+    
+
+
+@main.route("/API/V1/AnalyseClient", methods=["GET", "POST"])
+@cross_origin()
+def AnalyseClient():
+    try:
+        # Get and validate input dates
+        debut_date = request.json.get("DébutDate")
+        fin_date = request.json.get("FinDate")
+        
+        # Get client filter (optional) - can be a single client name or a list of clients
+        clients = request.json.get("Clients", [])
+        
+        # Get chart elements to exclude (optional)
+        exclude_charts = request.json.get("ExcludeCharts", [])
+        if isinstance(exclude_charts, str):
+            exclude_charts = [exclude_charts]
+        
+        # Convert single client to list for consistent handling
+        if isinstance(clients, str):
+            clients = [clients]
+
+        if not debut_date or not fin_date:
+            return jsonify({"Message":
+                            "DébutDate and FinDate are required."}), 400
+
+        # Convert dates once and reuse
+        try:
+            debut_date = pd.to_datetime(debut_date, format="%d/%m/%Y")
+            fin_date = pd.to_datetime(fin_date, format="%d/%m/%Y")
+        except ValueError:
+            return jsonify({"Message":
+                            "Invalid date format. Use DD/MM/YYYY."}), 400
+
+        if debut_date.year != fin_date.year:
+            return jsonify({
+                "Message":
+                "Date de début et date de fin doivent être dans la même année"
+            }), 400
+
+        if fin_date < debut_date:
+            return (
+                jsonify(
+                    {"Message": "FinDate cannot be earlier than DébutDate."}),
+                404,
+            )
+
+        # File path handling
+        year = str(debut_date.year)
+        source_path = os.path.join(os.path.dirname(__file__), "Source", year)
+        target_file = os.path.join(source_path, f"Source {year}.xlsx")
+
+        # Validate file existence
+        if not os.path.exists(source_path) or not os.path.exists(target_file):
+            return jsonify({"Message": f"Data not found for year {year}"}), 404
+
+        try:
+            data = read_excel_file(target_file)
+            ventes_df = data["ventes"]
+            recouvrement_df = data["recouvrement"]
+       
+        except Exception as e:
+            return jsonify({"Message": f"Error reading data: {str(e)}"}), 500
+
+        # Convert the Date column to datetime
+        ventes_df["Date"] = pd.to_datetime(ventes_df["Date"],
+                                          format="%d/%m/%Y",
+                                          errors="coerce")
+
+        recouvrement_df["Date de Paiement"] = pd.to_datetime(
+            recouvrement_df["Date de Paiement"],
+            format="%d/%m/%Y",
+            errors="coerce")
+
+        # Use vectorized operations for filtering by date
+        date_mask_ventes = (ventes_df["Date"].dt.date >= debut_date.date()) & (
+            ventes_df["Date"].dt.date <= fin_date.date())
+        date_mask_recouvrement = (
+            recouvrement_df["Date de Paiement"].dt.date >= debut_date.date()
+        ) & (recouvrement_df["Date de Paiement"].dt.date <= fin_date.date())
+
+        filtered_ventes = ventes_df[date_mask_ventes]
+        filtered_recouvrement = recouvrement_df[date_mask_recouvrement]
+
+        # Apply client filtering if clients list is not empty
+        if clients:
+            # Assuming the client column in ventes_df is named "Client"
+            filtered_ventes = filtered_ventes[filtered_ventes["Client"].isin(clients)]
+            
+            # Assuming the client column in recouvrement_df is named "Client"
+            filtered_recouvrement = filtered_recouvrement[filtered_recouvrement["Client"].isin(clients)]
+
+        if filtered_ventes.empty and filtered_recouvrement.empty:
+            return (
+                jsonify(
+                    {"Message": "No data found between the specified dates and client filters."}),
+                404,
+            )
+        
+     
+        # Determine aggregation type
+        group_by_month = should_aggregate_monthly(debut_date, fin_date)
+
+        # Parallel processing for chart data
+        chart_data = prepare_data_parallel(filtered_ventes, group_by_month,
+                                          target_file, debut_date, fin_date)
+       
+        # Add recouvrement chart data
+        try:
+            recouvrement_chart = prepare_recouvrement_data(filtered_recouvrement, group_by_month)
+            chart_data["RECOUVREMENTGRAPH"] = recouvrement_chart
+        except Exception as e:
+            print(f"Error preparing recouvrement chart: {str(e)}")
+    # Add default empty recouvrement chart structure
+            chart_data["RECOUVREMENTGRAPH"] = {
+        "DATES": [],
+        "MONTANTS": []
+    }
+        # Check if PMVGRAPH exists, if not add it with default structure
+        if "PMVGRAPH" not in chart_data:
+            # Generate default date range based on filter dates
+            start_month = debut_date.replace(day=1)
+            end_month = fin_date.replace(day=1)
+            
+            # Create list of months in MM/YYYY format
+            dates = []
+            current = start_month
+            while current <= end_month:
+                dates.append(current.strftime("%m/%Y"))
+                # Move to next month
+                if current.month == 12:
+                    current = current.replace(year=current.year + 1, month=1)
+                else:
+                    current = current.replace(month=current.month + 1)
+            
+            # Create default PMV structure with zeros
+            chart_data["PMVGRAPH"] = {
+                "PMVDATES": dates,
+                "PMVNOBLES": [0.0] * len(dates),
+                "PMVGRAVES": [0.0] * len(dates),
+                "PMVSTERILE": [0.0] * len(dates)
+            }
+        
+        # Default exclusions - fixed keys to match the actual keys in chart_data
+        default_exclusions = ["PERFORMANCECREANCEGRAPH", "TOP6CLIENTSGRAPH", "COMMANDEGRAPH"]
+        
+        # Add default exclusions to the user-provided exclusions
+        all_exclusions = exclude_charts + default_exclusions
+        
+        # Remove unwanted chart elements
+        for chart_key in all_exclusions:
+            if chart_key in chart_data:
+                del chart_data[chart_key]
+
+        # Calculate metrics in parallel
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            metrics_one = executor.submit(
+                Metrics,
+                filtered_ventes,
+                group_by_month,
+                "METRICS#1",
+                filtered_recouvrement,
+                debut_date,
+                fin_date,
+            )
+            metrics_two = executor.submit(
+                Metrics,
+                filtered_ventes,
+                group_by_month,
+                "METRICS#2",
+                filtered_recouvrement,
+                debut_date,
+                fin_date,
+            )
+
+        metrics_data = {
+            "METRICS_ONE": metrics_one.result(),
+            "METRICS_TWO": metrics_two.result(),
+        }
+
+        # Prepare final response
+        final_response = {
+            "Metrics": metrics_data,
+            "AggregationType": "monthly" if group_by_month else "daily",
+            "ClientsFiltered": clients if clients else "All",
+            "ExcludedCharts": all_exclusions,
+            **chart_data,
+         
+        }
+
+        return jsonify(final_response)
 
     except Exception as e:
         return jsonify({"Message": "An error occurred", "Error": str(e)}), 500
