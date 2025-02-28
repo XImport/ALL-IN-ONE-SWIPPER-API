@@ -774,3 +774,39 @@ def AnalyseClient():
 
     except Exception as e:
         return jsonify({"Message": "An error occurred", "Error": str(e)}), 500
+    
+
+
+
+@main.route("/API/V1/QueryClients", methods=["GET"])
+@cross_origin()
+def Query_Clients_DATA():
+    try:
+        # Define the year and construct file paths
+        year = "2025"
+        source_path = os.path.join(os.path.dirname(__file__), "Source", year)
+        target_file = os.path.join(source_path, f"Source {year}.xlsx")
+
+        # Validate file existence
+        if not os.path.exists(source_path) or not os.path.exists(target_file):
+            return jsonify({"Message": f"Data not found for year {year}"}), 404
+
+        # Read data
+        try:
+            data = read_excel_file(target_file)
+            info_clients_df = data["info_clients"]
+        except Exception as e:
+            return jsonify({"Message": f"Error reading data: {str(e)}"}), 500
+
+        # Convert timestamps if needed
+        info_clients_df = info_clients_df.map(
+            lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else x
+        )
+
+        # ✅ Rename "NOM DU CLIENT" to "CLIENTNAME" and select required columns
+        result = info_clients_df[['CODE', 'NOM DU CLIENT']].rename(columns={"NOM DU CLIENT": "CLIENTNAME"})
+
+        return jsonify({"INFO_CLIENTS": result.to_dict(orient="records")})
+
+    except Exception as e:
+        return jsonify({"Message": "An error occurred", "Error": str(e)}), 500
