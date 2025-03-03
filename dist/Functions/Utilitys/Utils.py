@@ -198,6 +198,107 @@ def should_aggregate_monthly(start_date, end_date):
     # If the date range is more than 20 days, aggregate by month
     return days_difference > 20
 
+def process_client_products(clients, info_clients_df, cout_revien_df):
+    """
+    Process client products, handle different units (/T and /M3), and track pricing information.
+    
+    Args:
+        clients: List of client names to process
+        info_clients_df: DataFrame containing client information
+        cout_revien_df: DataFrame containing cost information with units
+        
+    Returns:
+        Tuple containing (GRAPHCOUTREVIEN, ScopeUNITE) dictionaries
+    """
+    GRAPHCOUTREVIEN = {"PRODUCTSNAME": [], "COUTREVIEN": [], "PRIXVENTE": [], "UNITE": []}
+    ScopeUNITE = {}
+    
+    # Extract product names from cout_revien_df
+    product_columns = cout_revien_df.columns.tolist()[2:]  # Skip first two columns
+    
+    # Get the rows for cost per ton and cost per cubic meter
+    cout_revien_ent_row = cout_revien_df[cout_revien_df['PRODUTS'] == 'CoutRevienENT']
+    cout_revien_enm3_row = cout_revien_df[cout_revien_df['PRODUTS'] == 'CoutRevienENM3']
+    
+    # Store the product names
+    GRAPHCOUTREVIEN["PRODUCTSNAME"] = product_columns
+    
+    for client in clients:
+        index = info_clients_df[info_clients_df["NOM DU CLIENT"] == client].index
+        if not index.empty:  # Check if client exists in the DataFrame
+            client_data = info_clients_df.iloc[index[0]]  # Get first matching row
+            clients_products_price = client_data[20:].tolist()  # Get data from index 20 onwards
+            
+            for i, client_data_price in enumerate(clients_products_price):
+                # Skip if the value is not a string or is empty
+                if not isinstance(client_data_price, str) or not client_data_price:
+                    continue
+                
+                # Split by "/"
+                extractor = client_data_price.split("/")
+                if len(extractor) >= 2:
+                    price_value = extractor[0]
+                    unit_type = extractor[1]
+                    
+                    product_name = product_columns[i]
+                    
+                    # Add to GRAPHCOUTREVIEN
+                    GRAPHCOUTREVIEN["PRIXVENTE"].append(float(price_value))
+                    GRAPHCOUTREVIEN["UNITE"].append(unit_type)
+                    
+                    # Determine the correct cost based on unit type
+                    if unit_type == "T":
+                        # Get cost from CoutRevienENT row for this product
+                        cost = cout_revien_ent_row[product_name].values[0]
+                    elif unit_type == "M3":
+                        # Get cost from CoutRevienENM3 row for this product
+                        cost = cout_revien_enm3_row[product_name].values[0]
+                    else:
+                        cost = None
+                    
+                    GRAPHCOUTREVIEN["COUTREVIEN"].append(float(cost))
+                    
+                    # Update ScopeUNITE to keep track of units for each product
+                    ScopeUNITE[product_name] = unit_type
+    
+    return GRAPHCOUTREVIEN
+
+
+def calculate_marge(prix_vente_list, cout_achat_list):
+    """
+    Calculate the margin percentage based on selling price and purchase cost.
+    :param prix_vente_list: List of selling prices (HT)
+    :param cout_achat_list: List of purchase costs (HT)
+    :return: List of margin percentages
+    """
+    if len(prix_vente_list) != len(cout_achat_list):
+        raise ValueError("Both lists must have the same length")
+    
+    marges = []
+    for prix_vente, cout_achat in zip(prix_vente_list, cout_achat_list):
+        if prix_vente == 0:
+            marges.append(0)  # Avoid division by zero
+        else:
+            marge = ((prix_vente - cout_achat) / prix_vente) * 100
+            marges.append(round(marge, 2))  # Rounded to 2 decimal places
+    print(marges)
+    return marges
+
+
+# Example usage:
+# GRAPHCOUTREVIEN, ScopeUNITE = process_client_products(clients, info_clients_df, cout_revien_df)
+# print("GRAPHCOUTREVIEN:", GRAPHCOUTREVIEN)
+# print("ScopeUNITE:", ScopeUNITE)
+
+
+
+
+
+
+
+
+
+
 
 
 def prepare_recouvrement_data(filtered_recouvrement, group_by_month):

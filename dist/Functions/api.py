@@ -8,16 +8,19 @@ from .Utilitys.Utils import (
     should_aggregate_monthly,
     aggregate_time_series,
     Metrics_DATA_Filters,
-    prepare_recouvrement_data
+    prepare_recouvrement_data,
+    process_client_products
 )
 from .CHARTS.Volumedata import prepare_volume_data
 from .CHARTS.VolumeByProducts import prepare_volume_data_by_product
 from .CHARTS.CANetByProducts import prepare_ca_net_by_product
 from .CHARTS.VoyagesRendus import prepare_voyages_rendus_data
 from .CHARTS.CANetandCABrut import prepare_ca_data
+from .CHARTS.VolumeDataByProductByDates import prepare_volume_data_by_product_by_dates
 from .CHARTS.PerformanceCommercialAndFinancier import (
     prepare_performance_créance_commerciale_recouvrement, )
 from .CHARTS.PMVGlobal import prepare_pmv_data
+from .CHARTS.MargeBeneficiare import process_marge_products
 from .CHARTS.TopSixClients import prepare_top_six_clients
 from flask_cors import CORS, cross_origin
 import concurrent.futures
@@ -142,6 +145,7 @@ def read_excel_file(file_path):
         "recouvrement": pd.read_excel(file_path, sheet_name="RECOUVREMENT"),
         "objectifs": pd.read_excel(file_path, sheet_name="OBJECTIFS"),
         "info_clients": pd.read_excel(file_path, sheet_name="INFO CLIENTS"),
+        "cout_revien": pd.read_excel(file_path, sheet_name="COUT REVIEN"),
     }
 
 
@@ -640,6 +644,8 @@ def AnalyseClient():
             data = read_excel_file(target_file)
             ventes_df = data["ventes"]
             recouvrement_df = data["recouvrement"]
+            cout_revien_df = data["cout_revien"]
+            info_clients_df = data["info_clients"]
        
         except Exception as e:
             return jsonify({"Message": f"Error reading data: {str(e)}"}), 500
@@ -663,12 +669,24 @@ def AnalyseClient():
 
         filtered_ventes = ventes_df[date_mask_ventes]
         filtered_recouvrement = recouvrement_df[date_mask_recouvrement]
-
+  
         # Apply client filtering if clients list is not empty
+        QNT_BY_PRODUCTS_GRAPH = {
+            "GRAPHDATES" : [],
+            "GRAPHLABELPRODUCTS" : [],
+            "GRAPHDATAPRODUCTS" : []
+        }
+            # ////////////////// prix de vente
+        GRAPHCOUTREVIEN = {"PRODUCTSNAME" : [],"COUTREVIEN" : [],"PRIXVENTE" : [],"UNITE" : []}
+        
+
+
+        
         if clients:
             # Assuming the client column in ventes_df is named "Client"
             filtered_ventes = filtered_ventes[filtered_ventes["Client"].isin(clients)]
             
+
             # Assuming the client column in recouvrement_df is named "Client"
             filtered_recouvrement = filtered_recouvrement[filtered_recouvrement["Client"].isin(clients)]
 
@@ -681,7 +699,9 @@ def AnalyseClient():
         
      
         # Determine aggregation type
+        
         group_by_month = should_aggregate_monthly(debut_date, fin_date)
+        print("yeeeeeees", process_client_products(clients,info_clients_df,cout_revien_df) )
 
         # Parallel processing for chart data
         chart_data = prepare_data_parallel(filtered_ventes, group_by_month,
@@ -722,6 +742,8 @@ def AnalyseClient():
                 "PMVGRAVES": [0.0] * len(dates),
                 "PMVSTERILE": [0.0] * len(dates)
             }
+            chart_data.update({"CHARTCOUTREVIENWITHPRIXVENTE": process_client_products(clients, info_clients_df, cout_revien_df)})
+
         
         # Default exclusions - fixed keys to match the actual keys in chart_data
         default_exclusions = ["PERFORMANCECREANCEGRAPH", "TOP6CLIENTSGRAPH", "COMMANDEGRAPH"]
@@ -763,9 +785,12 @@ def AnalyseClient():
         # Prepare final response
         final_response = {
             "Metrics": metrics_data,
+            "VOLUMEDATABYPRODUCTSBYDATES" : prepare_volume_data_by_product_by_dates(filtered_ventes,group_by_month),
             "AggregationType": "monthly" if group_by_month else "daily",
             "ClientsFiltered": clients if clients else "All",
             "ExcludedCharts": all_exclusions,
+            "MARGE_PRODUCTS_BY_CLIENTS_CHART" : process_marge_products(clients, info_clients_df, cout_revien_df),
+            "CHARTCOUTREVIENWITHPRIXVENTE": process_client_products(clients, info_clients_df, cout_revien_df),
             **chart_data,
          
         }
