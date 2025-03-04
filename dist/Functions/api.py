@@ -9,7 +9,8 @@ from .Utilitys.Utils import (
     aggregate_time_series,
     Metrics_DATA_Filters,
     prepare_recouvrement_data,
-    process_client_products
+    process_client_products,
+    should_keep_product
 )
 from .CHARTS.Volumedata import prepare_volume_data
 from .CHARTS.VolumeByProducts import prepare_volume_data_by_product
@@ -20,7 +21,7 @@ from .CHARTS.VolumeDataByProductByDates import prepare_volume_data_by_product_by
 from .CHARTS.PerformanceCommercialAndFinancier import (
     prepare_performance_créance_commerciale_recouvrement, )
 from .CHARTS.PMVGlobal import prepare_pmv_data
-from .CHARTS.MargeBeneficiare import process_marge_products
+from .CHARTS.MargeBeneficiare import process_marge_products,calculate_marge
 from .CHARTS.TopSixClients import prepare_top_six_clients
 from flask_cors import CORS, cross_origin
 import concurrent.futures
@@ -743,7 +744,6 @@ def AnalyseClient():
                 "PMVSTERILE": [0.0] * len(dates)
             }
             chart_data.update({"CHARTCOUTREVIENWITHPRIXVENTE": process_client_products(clients, info_clients_df, cout_revien_df)})
-
         
         # Default exclusions - fixed keys to match the actual keys in chart_data
         default_exclusions = ["PERFORMANCECREANCEGRAPH", "TOP6CLIENTSGRAPH", "COMMANDEGRAPH"]
@@ -751,6 +751,33 @@ def AnalyseClient():
         # Add default exclusions to the user-provided exclusions
         all_exclusions = exclude_charts + default_exclusions
         
+       
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         # Remove unwanted chart elements
         for chart_key in all_exclusions:
             if chart_key in chart_data:
@@ -789,8 +816,8 @@ def AnalyseClient():
             "AggregationType": "monthly" if group_by_month else "daily",
             "ClientsFiltered": clients if clients else "All",
             "ExcludedCharts": all_exclusions,
-            "MARGE_PRODUCTS_BY_CLIENTS_CHART" : process_marge_products(clients, info_clients_df, cout_revien_df),
-            "CHARTCOUTREVIENWITHPRIXVENTE": process_client_products(clients, info_clients_df, cout_revien_df),
+            "MARGE_PRODUCTS_BY_CLIENTS_CHART" :  process_marge_products(clients, info_clients_df, cout_revien_df,filtered_ventes["Produit"].unique().tolist()),
+            "CHARTCOUTREVIENWITHPRIXVENTE": process_client_products(clients, info_clients_df, cout_revien_df,filtered_ventes["Produit"].unique().tolist()),
             **chart_data,
          
         }

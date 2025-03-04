@@ -3,6 +3,16 @@ import os
 import pandas as pd
 
 
+
+def should_keep_product(filter_products, product_name):
+    for filter_product in filter_products:
+        # Check for exact match or if the product name starts with the filter term
+        if product_name == filter_product or product_name.startswith(filter_product):
+            return True
+    return False
+
+
+
 def List_Division(list1, list2, default_value=0):
     """
     Perform element-wise division between two lists, handling division by zero.
@@ -198,7 +208,8 @@ def should_aggregate_monthly(start_date, end_date):
     # If the date range is more than 20 days, aggregate by month
     return days_difference > 20
 
-def process_client_products(clients, info_clients_df, cout_revien_df):
+
+def process_client_products(clients, info_clients_df, cout_revien_df, filters=None):
     """
     Process client products, handle different units (/T and /M3), and track pricing information.
     
@@ -206,6 +217,7 @@ def process_client_products(clients, info_clients_df, cout_revien_df):
         clients: List of client names to process
         info_clients_df: DataFrame containing client information
         cout_revien_df: DataFrame containing cost information with units
+        filters: Optional list of product names to filter by (only products in this list will be included)
         
     Returns:
         Tuple containing (GRAPHCOUTREVIEN, ScopeUNITE) dictionaries
@@ -220,7 +232,31 @@ def process_client_products(clients, info_clients_df, cout_revien_df):
     cout_revien_ent_row = cout_revien_df[cout_revien_df['PRODUTS'] == 'CoutRevienENT']
     cout_revien_enm3_row = cout_revien_df[cout_revien_df['PRODUTS'] == 'CoutRevienENM3']
     
-    # Store the product names
+    # Print for debugging
+    print("Available products in data:", product_columns)
+    
+    # Filter product columns if filters are provided
+    if filters is not None:
+        print("Filters provided:", filters)
+        
+        # Standardize filters and product names for comparison
+        std_filters = [f.strip().replace('/', '-').replace('/', ' ') for f in filters]
+        std_products = [p.strip().replace('/', '-').replace('/', ' ') for p in product_columns]
+        
+        # Create mapping from standardized to original names
+        product_map = {std: orig for std, orig in zip(std_products, product_columns)}
+        
+        filtered_products = []
+        for f in std_filters:
+            # Try exact match first
+            for i, p in enumerate(std_products):
+                if p == f:
+                    filtered_products.append(product_columns[i])
+        
+        print("Products after filtering:", filtered_products)
+        product_columns = filtered_products
+    
+    # Store the filtered product names
     GRAPHCOUTREVIEN["PRODUCTSNAME"] = product_columns
     
     for client in clients:
@@ -229,41 +265,52 @@ def process_client_products(clients, info_clients_df, cout_revien_df):
             client_data = info_clients_df.iloc[index[0]]  # Get first matching row
             clients_products_price = client_data[20:].tolist()  # Get data from index 20 onwards
             
-            for i, client_data_price in enumerate(clients_products_price):
-                # Skip if the value is not a string or is empty
-                if not isinstance(client_data_price, str) or not client_data_price:
-                    continue
-                
-                # Split by "/"
-                extractor = client_data_price.split("/")
-                if len(extractor) >= 2:
-                    price_value = extractor[0]
-                    unit_type = extractor[1]
+            product_indices = {}
+            # Map product names to their indices in the original data
+            all_products = cout_revien_df.columns.tolist()[2:]
+            for product_name in product_columns:
+                if product_name in all_products:
+                    product_indices[product_name] = all_products.index(product_name) + 20
+            
+            for product_name in product_columns:
+                if product_name in product_indices:
+                    client_data_index = product_indices[product_name]
                     
-                    product_name = product_columns[i]
+                    if client_data_index >= len(client_data):
+                        continue
+                        
+                    client_data_price = client_data[client_data_index]
                     
-                    # Add to GRAPHCOUTREVIEN
-                    GRAPHCOUTREVIEN["PRIXVENTE"].append(float(price_value))
-                    GRAPHCOUTREVIEN["UNITE"].append(unit_type)
+                    # Skip if the value is not a string or is empty
+                    if not isinstance(client_data_price, str) or not client_data_price:
+                        continue
                     
-                    # Determine the correct cost based on unit type
-                    if unit_type == "T":
-                        # Get cost from CoutRevienENT row for this product
-                        cost = cout_revien_ent_row[product_name].values[0]
-                    elif unit_type == "M3":
-                        # Get cost from CoutRevienENM3 row for this product
-                        cost = cout_revien_enm3_row[product_name].values[0]
-                    else:
-                        cost = None
-                    
-                    GRAPHCOUTREVIEN["COUTREVIEN"].append(float(cost))
-                    
-                    # Update ScopeUNITE to keep track of units for each product
-                    ScopeUNITE[product_name] = unit_type
+                    # Split by "/"
+                    extractor = client_data_price.split("/")
+                    if len(extractor) >= 2:
+                        price_value = extractor[0]
+                        unit_type = extractor[1]
+                        
+                        # Add to GRAPHCOUTREVIEN
+                        GRAPHCOUTREVIEN["PRIXVENTE"].append(float(price_value))
+                        GRAPHCOUTREVIEN["UNITE"].append(unit_type)
+                        
+                        # Determine the correct cost based on unit type
+                        if unit_type == "T":
+                            # Get cost from CoutRevienENT row for this product
+                            cost = cout_revien_ent_row[product_name].values[0]
+                        elif unit_type == "M3":
+                            # Get cost from CoutRevienENM3 row for this product
+                            cost = cout_revien_enm3_row[product_name].values[0]
+                        else:
+                            cost = None
+                        
+                        GRAPHCOUTREVIEN["COUTREVIEN"].append(float(cost))
+                        
+                        # Update ScopeUNITE to keep track of units for each product
+                        ScopeUNITE[product_name] = unit_type
     
-    return GRAPHCOUTREVIEN
-
-
+    return GRAPHCOUTREVIEN, ScopeUNITE
 def calculate_marge(prix_vente_list, cout_achat_list):
     """
     Calculate the margin percentage based on selling price and purchase cost.
