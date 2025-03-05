@@ -19,6 +19,7 @@ from .CHARTS.PMVGlobal import prepare_pmv_data
 from .CHARTS.MargeBeneficiare import process_marge_products, calculate_marge
 from .CHARTS.TopSixClients import prepare_top_six_clients
 from .CHARTS.DSO import calculate_client_DSO
+from .CHARTS.CreanceVSCA import CreanceVsCA
 from flask_cors import CORS, cross_origin
 import concurrent.futures
 from functools import lru_cache
@@ -679,6 +680,14 @@ def AnalyseClient():
             creance_client_df[creance_client_df["Client"].isin(clients)],
             client_delay_days)
 
+        # Filter creance_df_mask by clients
+    
+
+        # Apply client filtering to both dataframes passed to CreanceVsCA
+        Creance_client = CreanceVsCA(
+            filtered_ventes[filtered_ventes["Client"].isin(clients)],
+                        creance_client_df,clients,fin_date)
+        print("response",Creance_client)
         # Apply client filtering if clients list is not empty
         QNT_BY_PRODUCTS_GRAPH = {
             "GRAPHDATES": [],
@@ -821,7 +830,10 @@ def AnalyseClient():
             process_client_products(
                 clients, info_clients_df, cout_revien_df,
                 filtered_ventes["Produit"].unique().tolist()),
-            "DSO_CLIENTS_CHART": DSO_clients,
+            "CREANCE_CLIENT_CHART":
+            Creance_client,
+            "DSO_CLIENTS_CHART":
+            DSO_clients,
             **chart_data,
         }
 
