@@ -3,15 +3,10 @@ from flask import jsonify, request, Response, Blueprint
 import os
 import pandas as pd
 from datetime import datetime
-from .Utilitys.Utils import (
-    get_files_in_directory,
-    should_aggregate_monthly,
-    aggregate_time_series,
-    Metrics_DATA_Filters,
-    prepare_recouvrement_data,
-    process_client_products,
-    should_keep_product
-)
+from .Utilitys.Utils import (get_files_in_directory, should_aggregate_monthly,
+                             aggregate_time_series, Metrics_DATA_Filters,
+                             prepare_recouvrement_data,
+                             process_client_products, should_keep_product)
 from .CHARTS.Volumedata import prepare_volume_data
 from .CHARTS.VolumeByProducts import prepare_volume_data_by_product
 from .CHARTS.CANetByProducts import prepare_ca_net_by_product
@@ -21,8 +16,9 @@ from .CHARTS.VolumeDataByProductByDates import prepare_volume_data_by_product_by
 from .CHARTS.PerformanceCommercialAndFinancier import (
     prepare_performance_créance_commerciale_recouvrement, )
 from .CHARTS.PMVGlobal import prepare_pmv_data
-from .CHARTS.MargeBeneficiare import process_marge_products,calculate_marge
+from .CHARTS.MargeBeneficiare import process_marge_products, calculate_marge
 from .CHARTS.TopSixClients import prepare_top_six_clients
+from .CHARTS.DSO import calculate_client_DSO
 from flask_cors import CORS, cross_origin
 import concurrent.futures
 from functools import lru_cache
@@ -147,6 +143,7 @@ def read_excel_file(file_path):
         "objectifs": pd.read_excel(file_path, sheet_name="OBJECTIFS"),
         "info_clients": pd.read_excel(file_path, sheet_name="INFO CLIENTS"),
         "cout_revien": pd.read_excel(file_path, sheet_name="COUT REVIEN"),
+        "creance_client": pd.read_excel(file_path, sheet_name="CREANCES"),
     }
 
 
@@ -237,8 +234,6 @@ def balance_sheet():
         if not os.path.exists(source_path) or not os.path.exists(target_file):
             return jsonify({"Message": f"Data not found for year {year}"}), 404
 
-
-
         # data = read_excel_file(target_file)
         # ventes_df = data["ventes"]
         # if ventes_df["Date"].iloc[-1] < fin_date:
@@ -248,7 +243,6 @@ def balance_sheet():
         #     }), 200
 
         # Read data with caching
-
 
         try:
             data = read_excel_file(target_file)
@@ -265,8 +259,6 @@ def balance_sheet():
         ventes_df["Date"] = pd.to_datetime(ventes_df["Date"],
                                            format="%d/%m/%Y",
                                            errors="coerce")
-
-        
 
         recouvrement_df["Date de Paiement"] = pd.to_datetime(
             recouvrement_df["Date de Paiement"],
@@ -325,7 +317,6 @@ def balance_sheet():
 
         # Prepare final response
         final_response = {
-            
             "Metrics":
             metrics_data,
             "TABLES_DATA_OBJECTIFS":
@@ -547,8 +538,6 @@ def Info_Clients_req():
         info_clients_df = info_clients_df.map(
             lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else x)
 
-        
-
         # info_clients_json = json.loads(info_clients_df.to_json(orient="records"))
 
         # First get the matched records
@@ -584,7 +573,6 @@ def Info_Clients_req():
 
     except Exception as e:
         return jsonify({"Message": "An error occurred", "Error": str(e)}), 500
-    
 
 
 @main.route("/API/V1/AnalyseClient", methods=["GET", "POST"])
@@ -594,15 +582,15 @@ def AnalyseClient():
         # Get and validate input dates
         debut_date = request.json.get("DébutDate")
         fin_date = request.json.get("FinDate")
-        
+
         # Get client filter (optional) - can be a single client name or a list of clients
         clients = request.json.get("Clients", [])
-        
+
         # Get chart elements to exclude (optional)
         exclude_charts = request.json.get("ExcludeCharts", [])
         if isinstance(exclude_charts, str):
             exclude_charts = [exclude_charts]
-        
+
         # Convert single client to list for consistent handling
         if isinstance(clients, str):
             clients = [clients]
@@ -645,16 +633,17 @@ def AnalyseClient():
             data = read_excel_file(target_file)
             ventes_df = data["ventes"]
             recouvrement_df = data["recouvrement"]
+            creance_client_df = data["creance_client"]
             cout_revien_df = data["cout_revien"]
             info_clients_df = data["info_clients"]
-       
+
         except Exception as e:
             return jsonify({"Message": f"Error reading data: {str(e)}"}), 500
 
         # Convert the Date column to datetime
         ventes_df["Date"] = pd.to_datetime(ventes_df["Date"],
-                                          format="%d/%m/%Y",
-                                          errors="coerce")
+                                           format="%d/%m/%Y",
+                                           errors="coerce")
 
         recouvrement_df["Date de Paiement"] = pd.to_datetime(
             recouvrement_df["Date de Paiement"],
@@ -670,61 +659,84 @@ def AnalyseClient():
 
         filtered_ventes = ventes_df[date_mask_ventes]
         filtered_recouvrement = recouvrement_df[date_mask_recouvrement]
-  
+
+        # Create a dictionary to map clients to their delay days
+        client_delay_days = {}
+        for client in clients:
+            info_clients_df_client = info_clients_df[
+                info_clients_df["NOM DU CLIENT"] == client]
+            client_row = info_clients_df_client.to_dict(
+                'records')[0] if not info_clients_df_client.empty else None
+
+            if client_row["MODE DE REGLEMENT"].lower(
+            ) == "en avance":  # Make case-insensitive
+                client_delay_days[client] = 0
+            else:
+                client_delay_days[client] = int(
+                    client_row["MODE DE REGLEMENT"].split(" ")[0])
+
+        DSO_clients = calculate_client_DSO(
+            creance_client_df[creance_client_df["Client"].isin(clients)],
+            client_delay_days)
+
         # Apply client filtering if clients list is not empty
         QNT_BY_PRODUCTS_GRAPH = {
-            "GRAPHDATES" : [],
-            "GRAPHLABELPRODUCTS" : [],
-            "GRAPHDATAPRODUCTS" : []
+            "GRAPHDATES": [],
+            "GRAPHLABELPRODUCTS": [],
+            "GRAPHDATAPRODUCTS": []
         }
-            # ////////////////// prix de vente
-        GRAPHCOUTREVIEN = {"PRODUCTSNAME" : [],"COUTREVIEN" : [],"PRIXVENTE" : [],"UNITE" : []}
-        
+        # ////////////////// prix de vente
+        GRAPHCOUTREVIEN = {
+            "PRODUCTSNAME": [],
+            "COUTREVIEN": [],
+            "PRIXVENTE": [],
+            "UNITE": []
+        }
 
-
-        
         if clients:
             # Assuming the client column in ventes_df is named "Client"
-            filtered_ventes = filtered_ventes[filtered_ventes["Client"].isin(clients)]
-            
+            filtered_ventes = filtered_ventes[filtered_ventes["Client"].isin(
+                clients)]
 
             # Assuming the client column in recouvrement_df is named "Client"
-            filtered_recouvrement = filtered_recouvrement[filtered_recouvrement["Client"].isin(clients)]
+            filtered_recouvrement = filtered_recouvrement[
+                filtered_recouvrement["Client"].isin(clients)]
 
         if filtered_ventes.empty and filtered_recouvrement.empty:
             return (
-                jsonify(
-                    {"Message": "No data found between the specified dates and client filters."}),
+                jsonify({
+                    "Message":
+                    "No data found between the specified dates and client filters."
+                }),
                 404,
             )
-        
-     
+
         # Determine aggregation type
-        
+
         group_by_month = should_aggregate_monthly(debut_date, fin_date)
-        print("yeeeeeees", process_client_products(clients,info_clients_df,cout_revien_df) )
+        print(
+            "yeeeeeees",
+            process_client_products(clients, info_clients_df, cout_revien_df))
 
         # Parallel processing for chart data
         chart_data = prepare_data_parallel(filtered_ventes, group_by_month,
-                                          target_file, debut_date, fin_date)
-       
+                                           target_file, debut_date, fin_date)
+
         # Add recouvrement chart data
         try:
-            recouvrement_chart = prepare_recouvrement_data(filtered_recouvrement, group_by_month)
+            recouvrement_chart = prepare_recouvrement_data(
+                filtered_recouvrement, group_by_month)
             chart_data["RECOUVREMENTGRAPH"] = recouvrement_chart
         except Exception as e:
             print(f"Error preparing recouvrement chart: {str(e)}")
-    # Add default empty recouvrement chart structure
-            chart_data["RECOUVREMENTGRAPH"] = {
-        "DATES": [],
-        "MONTANTS": []
-    }
+            # Add default empty recouvrement chart structure
+            chart_data["RECOUVREMENTGRAPH"] = {"DATES": [], "MONTANTS": []}
         # Check if PMVGRAPH exists, if not add it with default structure
         if "PMVGRAPH" not in chart_data:
             # Generate default date range based on filter dates
             start_month = debut_date.replace(day=1)
             end_month = fin_date.replace(day=1)
-            
+
             # Create list of months in MM/YYYY format
             dates = []
             current = start_month
@@ -735,7 +747,7 @@ def AnalyseClient():
                     current = current.replace(year=current.year + 1, month=1)
                 else:
                     current = current.replace(month=current.month + 1)
-            
+
             # Create default PMV structure with zeros
             chart_data["PMVGRAPH"] = {
                 "PMVDATES": dates,
@@ -743,40 +755,19 @@ def AnalyseClient():
                 "PMVGRAVES": [0.0] * len(dates),
                 "PMVSTERILE": [0.0] * len(dates)
             }
-            chart_data.update({"CHARTCOUTREVIENWITHPRIXVENTE": process_client_products(clients, info_clients_df, cout_revien_df)})
-        
+            chart_data.update({
+                "CHARTCOUTREVIENWITHPRIXVENTE":
+                process_client_products(clients, info_clients_df,
+                                        cout_revien_df)
+            })
+
         # Default exclusions - fixed keys to match the actual keys in chart_data
-        default_exclusions = ["PERFORMANCECREANCEGRAPH", "TOP6CLIENTSGRAPH", "COMMANDEGRAPH"]
-        
+        default_exclusions = [
+            "PERFORMANCECREANCEGRAPH", "TOP6CLIENTSGRAPH", "COMMANDEGRAPH"
+        ]
+
         # Add default exclusions to the user-provided exclusions
         all_exclusions = exclude_charts + default_exclusions
-        
-       
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         # Remove unwanted chart elements
         for chart_key in all_exclusions:
@@ -811,23 +802,33 @@ def AnalyseClient():
 
         # Prepare final response
         final_response = {
-            "Metrics": metrics_data,
-            "VOLUMEDATABYPRODUCTSBYDATES" : prepare_volume_data_by_product_by_dates(filtered_ventes,group_by_month),
-            "AggregationType": "monthly" if group_by_month else "daily",
-            "ClientsFiltered": clients if clients else "All",
-            "ExcludedCharts": all_exclusions,
-            "MARGE_PRODUCTS_BY_CLIENTS_CHART" :  process_marge_products(clients, info_clients_df, cout_revien_df,filtered_ventes["Produit"].unique().tolist()),
-            "CHARTCOUTREVIENWITHPRIXVENTE": process_client_products(clients, info_clients_df, cout_revien_df,filtered_ventes["Produit"].unique().tolist()),
+            "Metrics":
+            metrics_data,
+            "VOLUMEDATABYPRODUCTSBYDATES":
+            prepare_volume_data_by_product_by_dates(filtered_ventes,
+                                                    group_by_month),
+            "AggregationType":
+            "monthly" if group_by_month else "daily",
+            "ClientsFiltered":
+            clients if clients else "All",
+            "ExcludedCharts":
+            all_exclusions,
+            "MARGE_PRODUCTS_BY_CLIENTS_CHART":
+            process_marge_products(
+                clients, info_clients_df, cout_revien_df,
+                filtered_ventes["Produit"].unique().tolist()),
+            "CHARTCOUTREVIENWITHPRIXVENTE":
+            process_client_products(
+                clients, info_clients_df, cout_revien_df,
+                filtered_ventes["Produit"].unique().tolist()),
+            "DSO_CLIENTS_CHART": DSO_clients,
             **chart_data,
-         
         }
 
         return jsonify(final_response)
 
     except Exception as e:
         return jsonify({"Message": "An error occurred", "Error": str(e)}), 500
-    
-
 
 
 @main.route("/API/V1/QueryClients", methods=["GET"])
@@ -852,11 +853,12 @@ def Query_Clients_DATA():
 
         # Convert timestamps if needed
         info_clients_df = info_clients_df.map(
-            lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else x
-        )
+            lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else x)
 
         # ✅ Rename "NOM DU CLIENT" to "CLIENTNAME" and select required columns
-        result = info_clients_df[['CODE', 'NOM DU CLIENT']].rename(columns={"NOM DU CLIENT": "CLIENTNAME"})
+        result = info_clients_df[[
+            'CODE', 'NOM DU CLIENT'
+        ]].rename(columns={"NOM DU CLIENT": "CLIENTNAME"})
 
         return jsonify({"INFO_CLIENTS": result.to_dict(orient="records")})
 
