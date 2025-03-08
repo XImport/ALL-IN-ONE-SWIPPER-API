@@ -18,8 +18,9 @@ from .CHARTS.PerformanceCommercialAndFinancier import (
 from .CHARTS.PMVGlobal import prepare_pmv_data
 from .CHARTS.MargeBeneficiare import process_marge_products, calculate_marge
 from .CHARTS.TopSixClients import prepare_top_six_clients
-from .CHARTS.DSO import calculate_client_DSO
+from .CHARTS.DailyVSPayment import calculate_dialy_vs_payment_date
 from .CHARTS.CreanceVSCA import CreanceVsCA
+from .CHARTS.DSO import calculate_DSO_clients
 from flask_cors import CORS, cross_origin
 import concurrent.futures
 from functools import lru_cache
@@ -660,6 +661,8 @@ def AnalyseClient():
 
         filtered_ventes = ventes_df[date_mask_ventes]
         filtered_recouvrement = recouvrement_df[date_mask_recouvrement]
+        # print(calculate_DSO_clients(filtered_ventes[filtered_ventes["Client"].isin(
+        #         clients)],creance_client_df))
 
         # Create a dictionary to map clients to their delay days
         client_delay_days = {}
@@ -676,18 +679,104 @@ def AnalyseClient():
                 client_delay_days[client] = int(
                     client_row["MODE DE REGLEMENT"].split(" ")[0])
 
-        DSO_clients = calculate_client_DSO(
+        Daily_vs_payment_date = calculate_dialy_vs_payment_date(
             creance_client_df[creance_client_df["Client"].isin(clients)],
             client_delay_days)
 
         # Filter creance_df_mask by clients
-    
 
         # Apply client filtering to both dataframes passed to CreanceVsCA
         Creance_client = CreanceVsCA(
             filtered_ventes[filtered_ventes["Client"].isin(clients)],
-                        creance_client_df,clients,fin_date)
-        print("response",Creance_client)
+            creance_client_df, clients, fin_date)
+        print("response", Creance_client)
+        # add the Number of Days to DSO_clients whcih are the debut date - fin date and group them by month
+        DSO_clients = calculate_DSO_clients(
+            filtered_ventes[filtered_ventes["Client"].isin(clients)],
+            creance_client_df)
+
+        # Calculate DSO for each month
+        current_date = debut_date
+        dso_by_month = {'dates': [], 'dso_values': []}
+
+        while current_date <= fin_date:
+            # Get the last day of current month
+            if current_date.month == 12:
+                next_month = current_date.replace(year=current_date.year + 1,
+                                                  month=1,
+                                                  day=1)
+            else:
+                next_month = current_date.replace(month=current_date.month + 1,
+                                                  day=1)
+            last_day = next_month - pd.Timedelta(days=1)
+
+            # For the first month, use debut_date
+            start = current_date if current_date.month == debut_date.month else current_date.replace(
+                day=1)
+            # For the last month, use fin_date
+            end = fin_date if current_date.month == fin_date.month else last_day
+
+            # Calculate days in this month
+            days_in_month = (end - start).days + 1
+
+            # Filter data for current month
+            month_mask = (filtered_ventes["Date"].dt.year == current_date.year) & \
+                        (filtered_ventes["Date"].dt.month == current_date.month)
+            monthly_sales = filtered_ventes[
+                month_mask & filtered_ventes["Client"].isin(clients)]
+            Client_data = info_clients_df[
+                info_clients_df["NOM DU CLIENT"].isin(clients)]
+
+            try:
+                # Print column names to debug
+                print("Creance columns:", creance_client_df.columns.tolist())
+
+                # Get accounts receivable for this month (from creance_client_df)
+                # Assuming the client column might be named differently
+                client_column = "CLIENT" if "CLIENT" in creance_client_df.columns else "Client"
+
+                accounts_receivable = creance_client_df[
+                    (creance_client_df[client_column].isin(clients))
+                    & (pd.to_datetime(creance_client_df["Date"],
+                                      format='%d/%m/%Y') <= end
+                       )]["Rest à Payer"].sum()
+
+                # Calculate total credit sales based on facturation percentage
+                if Client_data["POURCENTANGE FACTURATION"].iloc[0] > 0:
+                    percentage = Client_data["POURCENTANGE FACTURATION"].iloc[0]
+                    total_credit_sales = (monthly_sales["CA BRUT"].sum() * percentage * 1.2) + \
+                                       (monthly_sales["CA BRUT"].sum() * (1 - percentage))
+                else:
+                    total_credit_sales = monthly_sales["CA BRUT"].sum()
+
+                # Calculate DSO for this month
+                if total_credit_sales > 0:
+                    dso = (accounts_receivable / total_credit_sales) * days_in_month
+                else:
+                    dso = 0
+
+                print(f"Month: {current_date.strftime('%m-%Y')}")
+                print(f"Accounts Receivable: {accounts_receivable}")
+                print(f"Total Credit Sales: {total_credit_sales}")
+                print(f"Days in Month: {days_in_month}")
+                print(f"DSO: {dso}")
+
+                # Add to results
+                dso_by_month['dates'].append(current_date.strftime('%m-%Y'))
+                dso_by_month['dso_values'].append(round(dso, 2))
+
+            except Exception as e:
+                print(f"Error processing month {current_date}: {str(e)}")
+                dso_by_month['dates'].append(current_date.strftime('%m-%Y'))
+                dso_by_month['dso_values'].append(
+                    0)  # Default value for error cases
+
+            # Move to first day of next month
+            current_date = next_month
+
+        DSO_clients = dso_by_month
+        print("Final DSO_clients:", DSO_clients)
+
         # Apply client filtering if clients list is not empty
         QNT_BY_PRODUCTS_GRAPH = {
             "GRAPHDATES": [],
@@ -832,8 +921,10 @@ def AnalyseClient():
                 filtered_ventes["Produit"].unique().tolist()),
             "CREANCE_CLIENT_CHART":
             Creance_client,
-            "DSO_CLIENTS_CHART":
+            "DSO_clients":
             DSO_clients,
+            "Daily_vs_payment_date_CHART":
+            Daily_vs_payment_date,
             **chart_data,
         }
 
