@@ -21,6 +21,7 @@ from .CHARTS.TopSixClients import prepare_top_six_clients
 from .CHARTS.DailyVSPayment import calculate_dialy_vs_payment_date
 from .CHARTS.CreanceVSCA import CreanceVsCA
 from .CHARTS.DSO import calculate_DSO_clients
+from .CHARTS.RepartitionModesPayments import RepartitionModesPayments
 from flask_cors import CORS, cross_origin
 import concurrent.futures
 from functools import lru_cache
@@ -697,7 +698,11 @@ def AnalyseClient():
 
         # Calculate DSO for each month
         current_date = debut_date
-        dso_by_month = {'dates': [], 'dso_values': []}
+        dso_by_month = {
+            'dates': [],
+            'dso_values': [],
+            'client_payement_delaiy': []
+        }
 
         while current_date <= fin_date:
             # Get the last day of current month
@@ -742,8 +747,19 @@ def AnalyseClient():
                        )]["Rest à Payer"].sum()
 
                 # Calculate total credit sales based on facturation percentage
+                client_payement_delaiy = 0
+                try:
+                    if Client_data[" MODE DE REGLEMENT"].iloc[0].lower(
+                    ) == "en avance":
+                        client_payement_delaiy = 0
+                    else:
+                        client_payement_delaiy = Client_data[
+                            " MODE DE REGLEMENT"].iloc[0].split(" ")[0]
+                except Exception as e:
+                    client_payement_delaiy = 0
                 if Client_data["POURCENTANGE FACTURATION"].iloc[0] > 0:
-                    percentage = Client_data["POURCENTANGE FACTURATION"].iloc[0]
+                    percentage = Client_data["POURCENTANGE FACTURATION"].iloc[
+                        0]
                     total_credit_sales = (monthly_sales["CA BRUT"].sum() * percentage * 1.2) + \
                                        (monthly_sales["CA BRUT"].sum() * (1 - percentage))
                 else:
@@ -751,7 +767,8 @@ def AnalyseClient():
 
                 # Calculate DSO for this month
                 if total_credit_sales > 0:
-                    dso = (accounts_receivable / total_credit_sales) * days_in_month
+                    dso = (accounts_receivable /
+                           total_credit_sales) * days_in_month
                 else:
                     dso = 0
 
@@ -764,6 +781,8 @@ def AnalyseClient():
                 # Add to results
                 dso_by_month['dates'].append(current_date.strftime('%m-%Y'))
                 dso_by_month['dso_values'].append(round(dso, 2))
+                dso_by_month['client_payement_delaiy'].append(
+                    client_payement_delaiy)
 
             except Exception as e:
                 print(f"Error processing month {current_date}: {str(e)}")
@@ -775,8 +794,13 @@ def AnalyseClient():
             current_date = next_month
 
         DSO_clients = dso_by_month
-        print("Final DSO_clients:", DSO_clients)
 
+        
+        RepartitionModesPayments_data = RepartitionModesPayments(
+            info_clients_df[info_clients_df["NOM DU CLIENT"].isin(
+                clients)],
+            creance_client_df[creance_client_df["Client"].isin(clients)],
+            creance_client_df)
         # Apply client filtering if clients list is not empty
         QNT_BY_PRODUCTS_GRAPH = {
             "GRAPHDATES": [],
@@ -925,6 +949,8 @@ def AnalyseClient():
             DSO_clients,
             "Daily_vs_payment_date_CHART":
             Daily_vs_payment_date,
+            "RepartitionModesPayments_data":
+            RepartitionModesPayments_data,
             **chart_data,
         }
 
