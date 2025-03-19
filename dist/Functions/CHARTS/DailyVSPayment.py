@@ -4,7 +4,7 @@ from datetime import datetime
 
 def calculate_dialy_vs_payment_date(data_frame_filtred, client_delay_days):
     # Ensure 'Date' is in datetime format
-    data_frame_filtred["Date"] = pd.to_datetime(data_frame_filtred["Date"])
+    data_frame_filtred["Date"] = pd.to_datetime(data_frame_filtred["Date"], errors='coerce')
     data_frame_filtred["Date D'éachéance"] = pd.to_datetime(data_frame_filtred["Date D'éachéance"])
 
     # Filter rows where 'Solde Crédit' is greater than 0
