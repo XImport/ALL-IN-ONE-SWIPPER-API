@@ -3,21 +3,8 @@ import numpy as np
 
 import pandas as pd
 import numpy as np
-
 def CreanceVsCA(sells_df, creance_client_df, clientName, fin_date):
-    """
-    Provide detailed monthly financial analysis for specified clients.
-    
-    Parameters:
-    - sells_df: DataFrame containing sales information
-    - creance_client_df: DataFrame containing client receivables
-    - clientName: List of client names to filter
-    - fin_date: End date for filtering receivables
-    
-    Returns:
-    - DataFrame with monthly financial details
-    """
-    # Validate input parameters
+  
     if not isinstance(clientName, list):
         raise ValueError("clientName must be a list of client names")
     
@@ -33,7 +20,7 @@ def CreanceVsCA(sells_df, creance_client_df, clientName, fin_date):
         (creance_client_df["Client"].isin(clientName)) & 
         (creance_client_df["Date"] <= pd.to_datetime(fin_date))
     ]
-    
+    print("hereeeee" , creance_client_dataframe)
     # Filter for REGLEMENT and IMPAYE operations
     reglements_df = creance_client_dataframe[
         creance_client_dataframe["Type d'opération"] == "REGLEMENT"
@@ -96,39 +83,72 @@ def CreanceVsCA(sells_df, creance_client_df, clientName, fin_date):
                 receivables_monthly.loc[i, 'Solde Crédit']
             )
     
-    print("Monthly Receivables Analysis:")
-    print(receivables_monthly)
+    # Get all unique months from all datasets to ensure complete timeline
+    all_months = set()
+    for df in [sells_monthly, receivables_monthly, reglements_monthly, impayes_monthly]:
+        all_months.update(df['Date'].astype(str).tolist())
     
-    # Merge sales and receivables data
+    # Convert to list and sort
+    all_months = sorted(list(all_months))
+    
+    # Create a complete timeline DataFrame
+    complete_timeline = pd.DataFrame({'Date': [pd.Period(m) for m in all_months]})
+    
+    # Merge all data with the complete timeline
     monthly_analysis = pd.merge(
-        sells_monthly, 
-        receivables_monthly[['Date', 'Net Receivables']], 
-        on='Date', 
-        how='outer'
+        complete_timeline,
+        sells_monthly,
+        on='Date',
+        how='left'
     ).fillna(0)
     
-    # Merge payments data with monthly analysis
+    # Merge receivables data 
+    monthly_analysis = pd.merge(
+        monthly_analysis,
+        receivables_monthly[['Date', 'Net Receivables']],
+        on='Date',
+        how='left'
+    )
+ 
+    # Merge payments data
     monthly_analysis = pd.merge(
         monthly_analysis,
         reglements_monthly[['Date', 'Solde Crédit']].rename(columns={'Solde Crédit': 'Reglements'}),
         on='Date',
-        how='outer'
+        how='left'
     ).fillna(0)
     
-    # Merge unpaid data with monthly analysis
+    # Merge unpaid data
     monthly_analysis = pd.merge(
         monthly_analysis,
         impayes_monthly[['Date', 'Solde Débit']].rename(columns={'Solde Débit': 'Impayes'}),
         on='Date',
-        how='outer'
+        how='left'
     ).fillna(0)
+    
+    # Sort by date
+    monthly_analysis = monthly_analysis.sort_values('Date').reset_index(drop=True)
+    
+    # Now handle the balance carry-forward for Net Receivables
+    last_known_balance = 0
+    for i in range(len(monthly_analysis)):
+        if pd.isna(monthly_analysis.loc[i, 'Net Receivables']):
+            # If no transactions this month, carry forward the last balance
+            monthly_analysis.loc[i, 'Net Receivables'] = last_known_balance
+        else:
+            current_month_reglements = monthly_analysis.loc[i, 'Reglements']
+            current_month_impayes = monthly_analysis.loc[i, 'Impayes']
+            
+            # If there are no transactions at all this month (no reglements and no impayes)
+            if current_month_reglements == 0 and current_month_impayes == 0:
+                monthly_analysis.loc[i, 'Net Receivables'] = last_known_balance
+            else:
+                # Update the last known balance with the actual calculated value
+                last_known_balance = monthly_analysis.loc[i, 'Net Receivables']
     
     # Add additional columns for easier analysis
     monthly_analysis['Month'] = monthly_analysis['Date'].dt.strftime('%B')
     monthly_analysis['Year'] = monthly_analysis['Date'].dt.strftime('%Y')
-    
-    # Sort by date and reset index
-    monthly_analysis = monthly_analysis.sort_values('Date').reset_index(drop=True)
     
     # Convert the results to lists
     dates_list = monthly_analysis['Date'].dt.strftime('%Y-%m').tolist()
@@ -146,15 +166,10 @@ def CreanceVsCA(sells_df, creance_client_df, clientName, fin_date):
         'impayes': impayes_list
     }
 
-# Optional: Function to display the results in a more readable format
-def display_monthly_analysis(analysis_results):
-    """
-    Display the monthly financial analysis in a formatted manner.
-    """
-    print("Monthly Financial Analysis:")
-    df = analysis_results['dataframe']
-    for _, row in df.iterrows():
-        print(f"{row['Month']} {row['Year']}:")
-        print(f"  Gross Turnover: {row['CA BRUT']:.2f}")
-        print(f"  Net Receivables: {row['Net Receivables']:.2f}")
-        print()
+def get_adjusted_net_receivables(current_month_value, previous_month_value):
+    if current_month_value is None:  # No data for current month
+        if previous_month_value == 0:
+            return 0
+        else:
+            return previous_month_value
+    return current_month_value
