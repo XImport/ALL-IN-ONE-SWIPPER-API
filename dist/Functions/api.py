@@ -668,17 +668,25 @@ def AnalyseClient():
         # Create a dictionary to map clients to their delay days
         client_delay_days = {}
         for client in clients:
-            info_clients_df_client = info_clients_df[
-                info_clients_df["NOM DU CLIENT"] == client]
-            client_row = info_clients_df_client.to_dict(
-                'records')[0] if not info_clients_df_client.empty else None
-
-            if client_row["MODE DE REGLEMENT"].lower(
-            ) == "en avance":  # Make case-insensitive
-                client_delay_days[client] = 0
+            info_clients_df_client = info_clients_df[info_clients_df["NOM DU CLIENT"] == client]
+            # Check if empty before accessing
+            if not info_clients_df_client.empty:
+                client_row = info_clients_df_client.to_dict('records')[0]
+                
+                # Make sure MODE DE REGLEMENT exists before accessing
+                if "MODE DE REGLEMENT" in client_row and client_row["MODE DE REGLEMENT"] is not None:
+                    if client_row["MODE DE REGLEMENT"].lower() == "en avance":
+                        client_delay_days[client] = 0
+                    else:
+                        # Handle case where the string might not have the expected format
+                        try:
+                            client_delay_days[client] = int(client_row["MODE DE REGLEMENT"].split(" ")[0])
+                        except (ValueError, IndexError):
+                            client_delay_days[client] = 0
+                else:
+                    client_delay_days[client] = 0
             else:
-                client_delay_days[client] = int(
-                    client_row["MODE DE REGLEMENT"].split(" ")[0])
+                client_delay_days[client] = 0
 
         Daily_vs_payment_date = calculate_dialy_vs_payment_date(
             creance_client_df[creance_client_df["Client"].isin(clients)],
@@ -748,20 +756,35 @@ def AnalyseClient():
 
                 # Calculate total credit sales based on facturation percentage
                 client_payement_delaiy = 0
-                try:
-                    if Client_data[" MODE DE REGLEMENT"].iloc[0].lower(
-                    ) == "en avance":
-                        client_payement_delaiy = 0
+                
+                # Check if Client_data is not empty
+                if not Client_data.empty:
+                    # Check for column name variations (with or without space)
+                    mode_col = " MODE DE REGLEMENT" if " MODE DE REGLEMENT" in Client_data.columns else "MODE DE REGLEMENT"
+                    
+                    if mode_col in Client_data.columns and len(Client_data[mode_col]) > 0:
+                        mode_value = Client_data[mode_col].iloc[0]
+                        if isinstance(mode_value, str):
+                            if mode_value.lower() == "en avance":
+                                client_payement_delaiy = 0
+                            else:
+                                try:
+                                    client_payement_delaiy = int(mode_value.split(" ")[0])
+                                except (ValueError, IndexError):
+                                    client_payement_delaiy = 0
+                
+                # Check for POURCENTANGE FACTURATION column
+                pct_col = "POURCENTANGE FACTURATION"
+                percentage = 0
+                
+                if not Client_data.empty and pct_col in Client_data.columns and len(Client_data[pct_col]) > 0:
+                    pct_value = Client_data[pct_col].iloc[0]
+                    if isinstance(pct_value, (int, float)) and pct_value > 0:
+                        percentage = pct_value
+                        total_credit_sales = (monthly_sales["CA BRUT"].sum() * percentage * 1.2) + \
+                                           (monthly_sales["CA BRUT"].sum() * (1 - percentage))
                     else:
-                        client_payement_delaiy = Client_data[
-                            " MODE DE REGLEMENT"].iloc[0].split(" ")[0]
-                except Exception as e:
-                    client_payement_delaiy = 0
-                if Client_data["POURCENTANGE FACTURATION"].iloc[0] > 0:
-                    percentage = Client_data["POURCENTANGE FACTURATION"].iloc[
-                        0]
-                    total_credit_sales = (monthly_sales["CA BRUT"].sum() * percentage * 1.2) + \
-                                       (monthly_sales["CA BRUT"].sum() * (1 - percentage))
+                        total_credit_sales = monthly_sales["CA BRUT"].sum()
                 else:
                     total_credit_sales = monthly_sales["CA BRUT"].sum()
 
@@ -796,11 +819,23 @@ def AnalyseClient():
         DSO_clients = dso_by_month
 
         
-        RepartitionModesPayments_data = RepartitionModesPayments(
-            info_clients_df[info_clients_df["NOM DU CLIENT"].isin(
-                clients)],
-            creance_client_df[creance_client_df["Client"].isin(clients)],
-            creance_client_df)
+        # Make this more robust
+        filtered_info_clients = info_clients_df[info_clients_df["NOM DU CLIENT"].isin(clients)]
+        filtered_creance_client = creance_client_df[creance_client_df["Client"].isin(clients)]
+
+        # Check if they're empty before proceeding
+        if not filtered_info_clients.empty and not filtered_creance_client.empty:
+            RepartitionModesPayments_data = RepartitionModesPayments(
+                filtered_info_clients,
+                filtered_creance_client,
+                creance_client_df)
+        else:
+            # Provide a default empty structure
+            RepartitionModesPayments_data = {
+                "GRAPHLABELS": [],
+                "GRAPHDATA": []
+            }
+
         # Apply client filtering if clients list is not empty
         QNT_BY_PRODUCTS_GRAPH = {
             "GRAPHDATES": [],

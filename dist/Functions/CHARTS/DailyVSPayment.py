@@ -4,7 +4,7 @@ from datetime import datetime
 
 def calculate_dialy_vs_payment_date(data_frame_filtred, client_delay_days):
     # Print the problematic value to see what's causing the issue
-    print("Value at position 12:", data_frame_filtred["Date"].iloc[12])
+    
 
     # Use errors='coerce' to handle invalid dates
     data_frame_filtred["Date"] = pd.to_datetime(data_frame_filtred["Date"], errors='coerce')
