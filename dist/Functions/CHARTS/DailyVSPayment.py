@@ -3,8 +3,21 @@ from datetime import datetime
 
 
 def calculate_dialy_vs_payment_date(data_frame_filtred, client_delay_days):
-    # Ensure 'Date' is in datetime format
+    # Print the problematic value to see what's causing the issue
+    print("Value at position 12:", data_frame_filtred["Date"].iloc[12])
+
+    # Use errors='coerce' to handle invalid dates
     data_frame_filtred["Date"] = pd.to_datetime(data_frame_filtred["Date"], errors='coerce')
+
+    # Identify which rows have invalid dates
+    invalid_date_mask = data_frame_filtred["Date"].isna()
+    if invalid_date_mask.any():
+        print("Rows with invalid dates:", data_frame_filtred[invalid_date_mask])
+
+    # Remove rows with invalid dates (optional)
+    data_frame_filtred = data_frame_filtred.dropna(subset=["Date"])
+
+    # Ensure 'Date' is in datetime format
     data_frame_filtred["Date D'éachéance"] = pd.to_datetime(data_frame_filtred["Date D'éachéance"])
 
     # Filter rows where 'Solde Crédit' is greater than 0
